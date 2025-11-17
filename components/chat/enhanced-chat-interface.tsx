@@ -34,10 +34,27 @@ export function EnhancedChatInterface() {
   const scrollAnimationFrameRef = useRef<number | null>(null);
   const lastScrollCheckRef = useRef<number>(0);
   const scrollThrottleMs = 50; // Only check/scroll every 50ms during streaming
+  const isShortChatRef = useRef<boolean>(false); // Track if current chat is short
+  const lastScrollHeightRef = useRef<number>(0); // Track last scroll height to avoid unnecessary scrolls
 
   // Scroll to bottom - shows latest messages
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  // Stable scroll to bottom for short chats - only scrolls if already near bottom
+  const scrollToBottomIfNear = useCallback(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // Only scroll if already near bottom (within 200px) to avoid jumping if user scrolled up
+    if (distanceFromBottom < 200) {
+      // Use scrollIntoView with instant behavior for stability
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    }
   }, []);
 
   // Calculate if we need to adjust scroll position for new user message
@@ -193,10 +210,16 @@ export function EnhancedChatInterface() {
           const messageBottomRelativeToViewport = messageRect.bottom - containerRect.top;
           
           if (viewportUsage <= 0.5) {
-            // Short chat - scroll to bottom and add spacer for response
-            setSpacerHeight(Math.min(clientHeight * 0.7, 800)); // 70% of viewport or max 800px
-            scrollToBottom();
+            // Short chat - no spacer needed, just scroll to bottom and let natural scrolling happen
+            isShortChatRef.current = true;
+            setSpacerHeight(0); // No spacer for short chats
+            // Always scroll to bottom when user sends message (user just sent it, so they want to see it)
+            requestAnimationFrame(() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+            });
           } else {
+            // Long chat - use spacer and position maintenance
+            isShortChatRef.current = false;
             // Long chat - position message in upper portion with space below for response
             const offsetFromTop = 120; // Desired position from top
             const spaceForResponse = Math.min(clientHeight * 0.75, 800); // 75% of viewport or max 800px for more space
@@ -220,6 +243,31 @@ export function EnhancedChatInterface() {
   // During streaming - throttled auto-scroll until user message is about to scroll out of view
   useEffect(() => {
     if (isStreaming && streamingContent) {
+      // For short chats, use stable scroll-to-bottom logic with throttling
+      if (isShortChatRef.current) {
+        const container = messagesRef.current;
+        if (!container) return;
+        
+        const { scrollHeight } = container;
+        const now = Date.now();
+        const timeSinceLastCheck = now - lastScrollCheckRef.current;
+        
+        // Only scroll if content actually grew and enough time has passed
+        // This prevents unnecessary scrolls that cause flashing
+        if (timeSinceLastCheck >= 100 && scrollHeight > lastScrollHeightRef.current) {
+          lastScrollCheckRef.current = now;
+          lastScrollHeightRef.current = scrollHeight;
+          // Use stable scroll function that only scrolls if near bottom
+          requestAnimationFrame(() => {
+            scrollToBottomIfNear();
+          });
+        } else if (scrollHeight > lastScrollHeightRef.current) {
+          // Update height even if we don't scroll
+          lastScrollHeightRef.current = scrollHeight;
+        }
+        return;
+      }
+      
       // Check if we should continue auto-scrolling
       if (!shouldAutoScrollRef.current) {
         return; // User message is about to go out of view, stop scrolling
@@ -331,7 +379,20 @@ export function EnhancedChatInterface() {
         const container = messagesRef.current;
         if (!container) return;
 
-        // Find the user message element
+        // Check viewport usage first to determine if this is a short chat
+        const { scrollHeight, clientHeight } = container;
+        const viewportUsage = scrollHeight / clientHeight;
+        const isShortChat = viewportUsage <= 0.5;
+
+        // Remove spacer when response completes
+        setSpacerHeight(0);
+
+        // For short chats, don't do any scroll adjustments - just stay where we are
+        if (isShortChat || isShortChatRef.current) {
+          return; // No position maintenance needed for short chats
+        }
+
+        // For long chats only - find the user message element and maintain position
         const userMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
         if (!userMessageElement) return;
 
@@ -344,9 +405,7 @@ export function EnhancedChatInterface() {
         const targetMessageTop = messageTopRelativeToViewport;
         const currentScrollTop = container.scrollTop;
 
-        // Remove spacer when response completes
-        setSpacerHeight(0);
-
+        // For long chats, maintain user message position
         // Wait for DOM to update (spacer removal)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -462,6 +521,8 @@ export function EnhancedChatInterface() {
 
     // Reset auto-scroll flag for new message
     shouldAutoScrollRef.current = true;
+    // Reset scroll height tracking for new message
+    lastScrollHeightRef.current = 0;
 
     const updatedMessages = [...previousMessages, userMessage];
     setMessages(updatedMessages);
@@ -531,6 +592,13 @@ export function EnhancedChatInterface() {
                   accumulatedContent += parsed.content;
                   setStreamingContent(accumulatedContent);
                   setIsStreaming(true);
+                  // Reset scroll height tracking when streaming starts
+                  if (lastScrollHeightRef.current === 0) {
+                    const container = messagesRef.current;
+                    if (container) {
+                      lastScrollHeightRef.current = container.scrollHeight;
+                    }
+                  }
                 }
                 if (parsed.error) {
                   throw new Error(parsed.error);
