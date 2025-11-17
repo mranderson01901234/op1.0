@@ -16,6 +16,9 @@ export function ChatInput({ onSend, className }: ChatInputProps) {
 
   const handleSend = () => {
     if (message.trim()) {
+      const sendStartTime = performance.now();
+      console.log(`[PERF] ===== USER ACTION =====`);
+      console.log(`[PERF] ChatInput.handleSend called at ${sendStartTime.toFixed(2)}ms`);
       onSend(message.trim());
       setMessage("");
       if (textareaRef.current) {

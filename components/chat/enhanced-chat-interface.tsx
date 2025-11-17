@@ -1,13 +1,34 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+/**
+ * ⚠️ CRITICAL: Scroll Positioning Logic
+ * 
+ * This component implements complex scroll positioning logic to prevent visual flashing and jumping.
+ * 
+ * BEFORE MAKING ANY CHANGES TO SCROLL POSITIONING:
+ * 1. Read SCROLL_POSITIONING_LOGIC.md in the project root
+ * 2. Understand the difference between short chats (≤50% viewport) and long chats (>50% viewport)
+ * 3. Test all scenarios: short/long responses in short/long chats
+ * 
+ * Key sections marked with ⚠️ CRITICAL comments:
+ * - User message positioning (useLayoutEffect ~line 209)
+ * - Short response detection (useEffect ~line 300)
+ * - Response completion positioning (useLayoutEffect ~line 479)
+ * - Response rendering (div ~line 933)
+ * - Ref resets (handleSendMessage ~line 687)
+ * 
+ * DO NOT refactor these sections without understanding the full flow.
+ */
+
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, Copy, Check, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { ChatInput } from "./chat-input";
 import { MessageRenderer } from "./message-renderer";
 import { WelcomeScreen } from "./welcome-screen";
-import { MessageSkeleton } from "../ui/loading-skeleton";
+import { ProcessingIndicator } from "../ui/processing-indicator";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { saveConversation, getConversations } from "@/lib/storage";
 import { generateConversationTitle } from "@/lib/utils";
@@ -24,6 +45,8 @@ export function EnhancedChatInterface() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [spacerHeight, setSpacerHeight] = useState(0);
+  const [positioningMessageId, setPositioningMessageId] = useState<string | null>(null); // Track message being positioned
+  const [positioningResponseId, setPositioningResponseId] = useState<string | null>(null); // Track response being positioned after completion
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,6 +59,12 @@ export function EnhancedChatInterface() {
   const scrollThrottleMs = 50; // Only check/scroll every 50ms during streaming
   const isShortChatRef = useRef<boolean>(false); // Track if current chat is short
   const lastScrollHeightRef = useRef<number>(0); // Track last scroll height to avoid unnecessary scrolls
+  const processingIndicatorRef = useRef<HTMLDivElement>(null); // Ref for processing indicator to measure height
+  const positionLockedRef = useRef<boolean>(false); // Track if we've locked position to prevent flash
+  const positionedMessageIdsRef = useRef<Set<string>>(new Set()); // Track which messages have been positioned
+  const shortResponseDetectedRef = useRef<boolean>(false); // Track if we've detected response will be short
+  const responseLengthCheckCountRef = useRef<number>(0); // Track how many times we've checked response length
+  const streamingStartTimeRef = useRef<number>(0); // Track when streaming started
 
   // Scroll to bottom - shows latest messages
   const scrollToBottom = useCallback(() => {
@@ -188,61 +217,149 @@ export function EnhancedChatInterface() {
     return () => container.removeEventListener("scroll", checkScrollPosition);
   }, [checkScrollPosition]);
 
-  // On new user message - position it correctly after render
-  useEffect(() => {
+  // ⚠️ CRITICAL: User Message Positioning Logic
+  // This useLayoutEffect positions user messages synchronously before paint to prevent flashing.
+  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
+  // Key behaviors:
+  // - Uses flushSync to ensure state updates happen before paint
+  // - Sets isShortChatRef based on viewport usage (threshold: 0.5)
+  // - For short chats: scrolls to bottom, no spacer
+  // - For long chats: adds spacer (~75% viewport, max 800px) and positions ~120px from top
+  // On new user message - position it correctly IMMEDIATELY (synchronously before paint)
+  useLayoutEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === "user" && lastMessage.id === lastUserMessageId.current) {
-        requestAnimationFrame(() => {
-          const container = messagesRef.current;
-          if (!container) return;
-          
-          const messageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
-          if (!messageElement) return;
-          
-          const { scrollHeight, clientHeight } = container;
-          const viewportUsage = scrollHeight / clientHeight;
-          
-          // Get message position
-          const containerRect = container.getBoundingClientRect();
-          const messageRect = messageElement.getBoundingClientRect();
-          const messageTopRelativeToViewport = messageRect.top - containerRect.top;
-          const messageBottomRelativeToViewport = messageRect.bottom - containerRect.top;
-          
-          if (viewportUsage <= 0.5) {
-            // Short chat - no spacer needed, just scroll to bottom and let natural scrolling happen
-            isShortChatRef.current = true;
-            setSpacerHeight(0); // No spacer for short chats
-            // Always scroll to bottom when user sends message (user just sent it, so they want to see it)
-            requestAnimationFrame(() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+        // Skip if already positioned this message
+        if (positionedMessageIdsRef.current.has(lastMessage.id)) {
+          return;
+        }
+        
+        // Set positioning state to show processing indicator
+        setPositioningMessageId(lastMessage.id);
+        
+        const container = messagesRef.current;
+        if (!container) {
+          setPositioningMessageId(null);
+          return;
+        }
+        
+        const messageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
+        if (!messageElement) {
+          setPositioningMessageId(null);
+          return;
+        }
+        
+        const { scrollHeight, clientHeight } = container;
+        const viewportUsage = scrollHeight / clientHeight;
+        
+        // Temporarily disable smooth scrolling for instant positioning
+        const originalScrollBehavior = container.style.scrollBehavior;
+        container.style.scrollBehavior = 'auto';
+        
+        if (viewportUsage <= 0.5) {
+          // Short chat - no spacer needed, scroll to bottom immediately
+          isShortChatRef.current = true;
+          flushSync(() => {
+            setSpacerHeight(0);
+          });
+          // Re-query message element after flushSync in case DOM changed
+          const updatedMessageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
+          if (updatedMessageElement) {
+            // Scroll to bottom synchronously - no RAF delay
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+            // Mark as positioned and show message
+            positionedMessageIdsRef.current.add(lastMessage.id);
+            // Use flushSync to ensure state update happens before paint
+            flushSync(() => {
+              setPositioningMessageId(null);
             });
-          } else {
-            // Long chat - use spacer and position maintenance
-            isShortChatRef.current = false;
-            // Long chat - position message in upper portion with space below for response
-            const offsetFromTop = 120; // Desired position from top
-            const spaceForResponse = Math.min(clientHeight * 0.75, 800); // 75% of viewport or max 800px for more space
-            
-            // Use offsetTop to get message's position relative to container (more reliable)
-            // offsetTop gives position relative to offsetParent, which is the scrollable container
-            const messageOffsetTop = (messageElement as HTMLElement).offsetTop;
-            
-            // Calculate target scroll position: message should be at offsetFromTop from top
-            const targetScrollTop = messageOffsetTop - offsetFromTop;
-            
-            // Scroll to position message correctly
-            container.scrollTop = Math.max(0, targetScrollTop);
-            setSpacerHeight(spaceForResponse);
           }
-        });
+        } else {
+          // Long chat - use spacer and position maintenance
+          isShortChatRef.current = false;
+          const offsetFromTop = 120;
+          const spaceForResponse = Math.min(clientHeight * 0.75, 800);
+          
+          // Force spacer to render synchronously before positioning
+          flushSync(() => {
+            setSpacerHeight(spaceForResponse);
+          });
+          
+          // Re-query message element after flushSync - spacer may have changed layout
+          const updatedMessageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
+          if (updatedMessageElement) {
+            // Recalculate position with updated layout
+            const messageOffsetTop = (updatedMessageElement as HTMLElement).offsetTop;
+            const targetScrollTop = messageOffsetTop - offsetFromTop;
+            container.scrollTop = Math.max(0, targetScrollTop);
+            // Mark as positioned and show message
+            positionedMessageIdsRef.current.add(lastMessage.id);
+            // Use flushSync to ensure state update happens before paint
+            flushSync(() => {
+              setPositioningMessageId(null);
+            });
+          }
+        }
+        
+        // Restore scroll behavior after positioning
+        container.style.scrollBehavior = originalScrollBehavior;
       }
     }
-  }, [messages.length, scrollToBottom]);
+  }, [messages.length]);
 
+  // ⚠️ CRITICAL: Short Response Detection & Streaming Scroll Logic
+  // This useEffect detects short responses early and adjusts spacer to prevent jumping.
+  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
+  // Key behaviors:
+  // - Monitors response length during streaming (checks after 3 chunks or 500ms)
+  // - If response < 200 chars, reduces spacer from ~75% to ~20% viewport
+  // - Adjusts scroll position when spacer is reduced
+  // Thresholds are tuned - changing them may cause regressions
   // During streaming - throttled auto-scroll until user message is about to scroll out of view
   useEffect(() => {
     if (isStreaming && streamingContent) {
+      // Detect short responses early to prevent unnecessary scrolling
+      // Check after a few chunks if response is still short, then reduce spacer
+      if (!isShortChatRef.current && !shortResponseDetectedRef.current && spacerHeight > 0) {
+        // Set streaming start time on first chunk
+        if (streamingStartTimeRef.current === 0) {
+          streamingStartTimeRef.current = Date.now();
+        }
+        
+        responseLengthCheckCountRef.current += 1;
+        const contentLength = streamingContent.length;
+        const timeStreaming = Date.now() - streamingStartTimeRef.current;
+        
+        // After 3 chunks or 500ms, check if response is still short
+        if (responseLengthCheckCountRef.current >= 3 || timeStreaming > 500) {
+          // If response is still short (< 200 chars), reduce spacer to prevent jump
+          if (contentLength < 200) {
+            shortResponseDetectedRef.current = true;
+            // Reduce spacer significantly to prevent scroll jump
+            const container = messagesRef.current;
+            if (container) {
+              const { clientHeight } = container;
+              // Use much smaller spacer for short responses
+              const reducedSpacer = Math.min(clientHeight * 0.2, 200);
+              flushSync(() => {
+                setSpacerHeight(reducedSpacer);
+              });
+              // Adjust scroll position to compensate
+              const userMessageElement = container.querySelector(`[data-message-id="${lastUserMessageId.current}"]`) as HTMLElement;
+              if (userMessageElement) {
+                const containerRect = container.getBoundingClientRect();
+                const messageRect = userMessageElement.getBoundingClientRect();
+                const messageTopRelativeToViewport = messageRect.top - containerRect.top;
+                const offsetFromTop = 120;
+                const targetScrollTop = userMessageElement.offsetTop - offsetFromTop;
+                container.scrollTop = Math.max(0, targetScrollTop);
+              }
+            }
+          }
+        }
+      }
+      
       // For short chats, use stable scroll-to-bottom logic with throttling
       if (isShortChatRef.current) {
         const container = messagesRef.current;
@@ -352,6 +469,9 @@ export function EnhancedChatInterface() {
         // Reset throttle timer
         lastScrollCheckRef.current = 0;
         
+        // Reset streaming start time when streaming stops
+        streamingStartTimeRef.current = 0;
+        
         // Only reset shouldAutoScrollRef when streaming has actually completed (assistant message added)
         // Don't reset when we're just starting a new message (user message added)
         if (isStreamingCompleted) {
@@ -359,7 +479,7 @@ export function EnhancedChatInterface() {
         }
       }
     }
-  }, [streamingContent, isStreaming, messages]);
+  }, [streamingContent, isStreaming, messages, spacerHeight]);
 
   // Initial load - start at bottom
   useEffect(() => {
@@ -368,8 +488,15 @@ export function EnhancedChatInterface() {
     }
   }, [currentConversationId]);
 
-  // When response completes, ensure user message stays in place
-  useEffect(() => {
+  // ⚠️ CRITICAL: Response Completion Positioning Logic
+  // This useLayoutEffect locks user message position when response completes to prevent jumping.
+  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
+  // Key behaviors:
+  // - For short chats: Skips all positioning logic (no adjustments needed)
+  // - For long chats: Removes spacer and adjusts scroll to maintain user message position
+  // - Uses flushSync to ensure positioning happens before paint
+  // When response completes, ensure user message stays in place (synchronously before paint)
+  useLayoutEffect(() => {
     if (messages.length >= 2) {
       const lastMessage = messages[messages.length - 1];
       const secondLastMessage = messages[messages.length - 2];
@@ -379,48 +506,101 @@ export function EnhancedChatInterface() {
         const container = messagesRef.current;
         if (!container) return;
 
-        // Check viewport usage first to determine if this is a short chat
-        const { scrollHeight, clientHeight } = container;
-        const viewportUsage = scrollHeight / clientHeight;
-        const isShortChat = viewportUsage <= 0.5;
+        // Prevent double adjustments
+        if (positionLockedRef.current) return;
 
-        // Remove spacer when response completes
-        setSpacerHeight(0);
-
-        // For short chats, don't do any scroll adjustments - just stay where we are
-        if (isShortChat || isShortChatRef.current) {
-          return; // No position maintenance needed for short chats
+        // For short chats, skip all positioning logic - scroll was already handled before message was added
+        if (isShortChatRef.current) {
+          return;
         }
 
-        // For long chats only - find the user message element and maintain position
-        const userMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
-        if (!userMessageElement) return;
+        positionLockedRef.current = true;
 
-        // Get current position of user message relative to viewport
+        // Find the user message element BEFORE any DOM changes
+        const userMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
+        if (!userMessageElement) {
+          positionLockedRef.current = false;
+          return;
+        }
+
+        // Positioning state should already be set when message was added (in handleSendMessage)
+        // But verify it's set, and if not, set it now
+        if (positioningResponseId !== lastMessage.id) {
+          flushSync(() => {
+            setPositioningResponseId(lastMessage.id);
+          });
+        }
+
+        // Lock the user message position BEFORE removing spacer or making any changes
         const containerRect = container.getBoundingClientRect();
         const messageRect = userMessageElement.getBoundingClientRect();
         const messageTopRelativeToViewport = messageRect.top - containerRect.top;
-
-        // Store this position
-        const targetMessageTop = messageTopRelativeToViewport;
+        const messageOffsetTop = userMessageElement.offsetTop;
         const currentScrollTop = container.scrollTop;
 
-        // For long chats, maintain user message position
-        // Wait for DOM to update (spacer removal)
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            // Re-measure after spacer removal
-            const newMessageRect = userMessageElement.getBoundingClientRect();
-            const newContainerRect = container.getBoundingClientRect();
-            const newMessageTopRelativeToViewport = newMessageRect.top - newContainerRect.top;
-            const difference = newMessageTopRelativeToViewport - targetMessageTop;
+        // Store target position - we want to maintain the visual position of the message top
+        const targetMessageTop = messageTopRelativeToViewport;
+        const targetMessageOffsetTop = messageOffsetTop;
 
-            // Adjust scroll to keep message in exact same position
-            if (Math.abs(difference) > 1) {
-              container.scrollTop = currentScrollTop - difference;
-            }
-          });
+        // Temporarily disable smooth scrolling for instant positioning
+        const originalScrollBehavior = container.style.scrollBehavior;
+        container.style.scrollBehavior = 'auto';
+
+        // Remove spacer synchronously
+        flushSync(() => {
+          setSpacerHeight(0);
         });
+
+        // Re-query elements after spacer removal
+        const updatedUserMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
+        if (!updatedUserMessageElement) {
+          positionLockedRef.current = false;
+          flushSync(() => {
+            setPositioningResponseId(null);
+          });
+          container.style.scrollBehavior = originalScrollBehavior;
+          return;
+        }
+
+        // Find the completed assistant response element (reuse container from above)
+        const updatedUserMessageContainer = updatedUserMessageElement.querySelector('.relative.w-full.max-w-full') as HTMLElement;
+        const completedResponseElement = updatedUserMessageContainer?.querySelector('.mt-6.group') as HTMLElement;
+
+        // Measure new positions
+        const newMessageRect = updatedUserMessageElement.getBoundingClientRect();
+        const newContainerRect = container.getBoundingClientRect();
+        const newMessageTopRelativeToViewport = newMessageRect.top - newContainerRect.top;
+        const newMessageOffsetTop = updatedUserMessageElement.offsetTop;
+
+        // Calculate how much the message moved
+        const visualDifference = newMessageTopRelativeToViewport - targetMessageTop;
+        const offsetDifference = newMessageOffsetTop - targetMessageOffsetTop;
+
+        // Only adjust if message is still visible in viewport
+        const isMessageVisible = newMessageTopRelativeToViewport >= -100 && 
+                                newMessageTopRelativeToViewport <= container.clientHeight + 100;
+
+        // Adjust scroll to compensate for movement synchronously
+        if (isMessageVisible) {
+          const currentMeasuredScrollTop = container.scrollTop;
+          
+          if (Math.abs(visualDifference) > 0.05) {
+            container.scrollTop = currentMeasuredScrollTop - visualDifference;
+          } else if (Math.abs(offsetDifference) > 0.05) {
+            container.scrollTop = currentMeasuredScrollTop - offsetDifference;
+          }
+        }
+
+        // Restore scroll behavior and show response
+        container.style.scrollBehavior = originalScrollBehavior;
+        
+        // Mark as positioned and show response
+        flushSync(() => {
+          setPositioningResponseId(null);
+        });
+        
+        // Reset lock after adjustment completes
+        positionLockedRef.current = false;
       }
     }
   }, [messages.length]);
@@ -432,9 +612,11 @@ export function EnhancedChatInterface() {
       const lastConversation = conversations[0];
       setCurrentConversationId(lastConversation.id);
       setMessages(lastConversation.messages);
+      positionedMessageIdsRef.current.clear(); // Reset for loaded conversation
     } else {
       // Create new conversation
       setCurrentConversationId(`conv_${Date.now()}`);
+      positionedMessageIdsRef.current.clear(); // Reset for new conversation
     }
   }, []);
 
@@ -471,6 +653,9 @@ export function EnhancedChatInterface() {
     setIsLoading(false);
     setIsStreaming(false);
     setSpacerHeight(0);
+    setPositioningMessageId(null); // Clear positioning state
+    setPositioningResponseId(null); // Clear response positioning state
+    positionedMessageIdsRef.current.clear(); // Reset positioned messages for new chat
     setCurrentConversationId(`conv_${Date.now()}`);
     toast.success("Started new conversation");
   }, [messages, currentConversationId, saveCurrentConversation]);
@@ -519,10 +704,17 @@ export function EnhancedChatInterface() {
       scrollAnimationFrameRef.current = null;
     }
 
-    // Reset auto-scroll flag for new message
+    // ⚠️ CRITICAL: Reset refs for new message
+    // These refs MUST be reset when starting a new message to ensure correct positioning behavior.
+    // DO NOT remove any of these resets without understanding their purpose.
+    // See SCROLL_POSITIONING_LOGIC.md for details.
     shouldAutoScrollRef.current = true;
-    // Reset scroll height tracking for new message
     lastScrollHeightRef.current = 0;
+    positionLockedRef.current = false;
+    shortResponseDetectedRef.current = false;
+    responseLengthCheckCountRef.current = 0;
+    streamingStartTimeRef.current = 0;
+    // Note: Don't clear positionedMessageIdsRef here - we want to track positioned messages across the conversation
 
     const updatedMessages = [...previousMessages, userMessage];
     setMessages(updatedMessages);
@@ -578,6 +770,24 @@ export function EnhancedChatInterface() {
                   content: accumulatedContent,
                   timestamp: new Date(),
                 };
+                // ⚠️ CRITICAL: Response completion positioning state
+                // Only set positioningResponseId for long chats - short chats skip positioning to prevent flashing.
+                // For short chats, scroll to bottom before adding message to prevent jump.
+                // DO NOT set positioningResponseId for short chats - this causes flashing.
+                if (!isShortChatRef.current) {
+                  setPositioningResponseId(assistantMessage.id);
+                } else {
+                  // For short chats, ensure we're at bottom before adding message to prevent jump
+                  const container = messagesRef.current;
+                  if (container) {
+                    const { scrollHeight, clientHeight } = container;
+                    const maxScroll = scrollHeight - clientHeight;
+                    const originalScrollBehavior = container.style.scrollBehavior;
+                    container.style.scrollBehavior = 'auto';
+                    container.scrollTop = maxScroll;
+                    container.style.scrollBehavior = originalScrollBehavior;
+                  }
+                }
                 const finalMessages = [...updatedMessages, assistantMessage];
                 setMessages(finalMessages);
                 saveCurrentConversation(finalMessages);
@@ -624,6 +834,22 @@ export function EnhancedChatInterface() {
           content: "I apologize, but I encountered an error. Please try again.",
           timestamp: new Date(),
         };
+        // Only set positioning state for long chats that need positioning
+        // For short chats, don't set it to avoid flashing
+        if (!isShortChatRef.current) {
+          setPositioningResponseId(assistantMessage.id);
+        } else {
+          // For short chats, ensure we're at bottom before adding message to prevent jump
+          const container = messagesRef.current;
+          if (container) {
+            const { scrollHeight, clientHeight } = container;
+            const maxScroll = scrollHeight - clientHeight;
+            const originalScrollBehavior = container.style.scrollBehavior;
+            container.style.scrollBehavior = 'auto';
+            container.scrollTop = maxScroll;
+            container.style.scrollBehavior = originalScrollBehavior;
+          }
+        }
         setMessages([...updatedMessages, assistantMessage]);
       }
       setIsLoading(false);
@@ -661,7 +887,15 @@ export function EnhancedChatInterface() {
           {!hasMessages ? (
             <WelcomeScreen onPromptSelect={handleSendMessage} />
           ) : (
-            <div className="flex flex-col space-y-6">
+            <motion.div 
+              className="flex flex-col space-y-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ 
+                duration: 0.5,
+                ease: [0.16, 1, 0.3, 1]
+              }}
+            >
               <AnimatePresence mode="popLayout">
                 {messages.map((message, index) => {
                   const isLastUserMessage = message.id === lastUserMessageId.current;
@@ -677,6 +911,7 @@ export function EnhancedChatInterface() {
 
                   // Check if we need spacer for this message
                   const needsSpacer = isLastUserMessage && !hasAssistantReply && spacerHeight > 0;
+                  const isPositioning = positioningMessageId === message.id;
 
                   return (
                     <>
@@ -685,94 +920,115 @@ export function EnhancedChatInterface() {
                       data-message-id={message.id}
                       ref={isLastUserMessage ? lastUserMessageRef : null}
                       initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      animate={{ opacity: isPositioning ? 0 : 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ 
+                        duration: 0.4,
+                        ease: [0.16, 1, 0.3, 1] // Smooth ease-out curve
+                      }}
                       className={cn(
                         "group relative mb-6 px-6",
                         message.role === "user" ? "flex justify-end" : "flex justify-start"
                       )}
                     >
                     <div className="relative w-full max-w-full">
+                      {/* Show processing indicator while positioning */}
+                      {isPositioning && (
+                        <div className={cn(
+                          "mb-4",
+                          message.role === "user" ? "flex justify-end" : "flex justify-start"
+                        )}>
+                          <ProcessingIndicator />
+                        </div>
+                      )}
                       <MessageRenderer
                         content={message.content}
                         isUser={message.role === "user"}
                       />
 
+                      {/* ⚠️ CRITICAL: Completed assistant response rendering
+                          Uses regular div (not motion.div) to avoid animation overhead that causes flashing.
+                          Opacity controlled via style prop based on positioningResponseId.
+                          For short chats: positioningResponseId is never set, so response appears immediately.
+                          DO NOT change to motion.div or remove opacity control without reading SCROLL_POSITIONING_LOGIC.md */}
                       {/* Completed assistant response attached to user message */}
                       {message.role === "user" && hasAssistantReply && (
-                        <div className="mt-6 group">
+                        <div 
+                          className="mt-6 group"
+                          style={{
+                            opacity: positioningResponseId === nextMessage.id ? 0 : 1,
+                            pointerEvents: positioningResponseId === nextMessage.id ? 'none' : undefined
+                          }}
+                        >
                           <MessageRenderer content={nextMessage.content} isUser={false} />
 
                           {/* Action buttons for completed assistant response */}
-                          <div className="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                            <button
-                              onClick={() => handleCopyMessage(nextMessage.content, nextMessage.id)}
-                              className="flex items-center gap-1.5 rounded-md bg-[#1c1d21] px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-[#23242a] hover:text-white"
-                              aria-label="Copy message"
-                            >
-                              {copiedMessageId === nextMessage.id ? (
-                                <>
-                                  <Check className="h-3 w-3" />
-                                  Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3 w-3" />
-                                  Copy
-                                </>
-                              )}
-                            </button>
+                          <button
+                            onClick={() => handleCopyMessage(nextMessage.content, nextMessage.id)}
+                            className="mt-2 text-gray-400 transition-colors hover:text-white"
+                            aria-label="Copy message"
+                          >
+                            {copiedMessageId === nextMessage.id ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </button>
 
-                            <button
-                              onClick={() => handleRetry(index)}
-                              disabled={retryingMessageIndex === index}
-                              className="flex items-center gap-1.5 rounded-md bg-[#1c1d21] px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-[#23242a] hover:text-white disabled:opacity-50"
-                              aria-label="Retry message"
-                            >
-                              <RotateCcw className="h-3 w-3" />
-                              Retry
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleRetry(index)}
+                            disabled={retryingMessageIndex === index}
+                            className="mt-2 ml-2 text-gray-400 transition-colors hover:text-white disabled:opacity-50"
+                            aria-label="Retry message"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
                         </div>
                       )}
 
                       {/* Streaming response attached to last user message */}
                       {isLastUserMessage && (streamingContent || isLoading) && streamingContent && (
                         <motion.div
-                          initial={{ opacity: 0, y: 10 }}
+                          initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
+                          transition={{ 
+                            duration: 0.5,
+                            ease: [0.16, 1, 0.3, 1]
+                          }}
                           className="mt-6"
                         >
                           <MessageRenderer content={streamingContent} isUser={false} />
                         </motion.div>
                       )}
 
-                      {/* Loading skeleton attached to last user message */}
+                      {/* Processing indicator attached to last user message */}
                       {isLastUserMessage && isLoading && !streamingContent && (
-                        <div className="mt-6">
-                          <MessageSkeleton />
-                        </div>
+                        <motion.div 
+                          ref={processingIndicatorRef}
+                          className="mt-6"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ 
+                            duration: 0.4,
+                            ease: [0.16, 1, 0.3, 1]
+                          }}
+                        >
+                          <ProcessingIndicator />
+                        </motion.div>
                       )}
 
                       {/* Action buttons for assistant messages */}
                       {message.role === "assistant" && (
-                        <div className="mt-2 flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                        <>
                           <button
                             onClick={() => handleCopyMessage(message.content, message.id)}
-                            className="flex items-center gap-1.5 rounded-md bg-[#1c1d21] px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-[#23242a] hover:text-white"
+                            className="mt-2 text-gray-400 transition-colors hover:text-white"
                             aria-label="Copy message"
                           >
                             {copiedMessageId === message.id ? (
-                              <>
-                                <Check className="h-3 w-3" />
-                                Copied
-                              </>
+                              <Check className="h-4 w-4" />
                             ) : (
-                              <>
-                                <Copy className="h-3 w-3" />
-                                Copy
-                              </>
+                              <Copy className="h-4 w-4" />
                             )}
                           </button>
 
@@ -780,14 +1036,13 @@ export function EnhancedChatInterface() {
                             <button
                               onClick={() => handleRetry(index - 1)}
                               disabled={retryingMessageIndex === index - 1}
-                              className="flex items-center gap-1.5 rounded-md bg-[#1c1d21] px-2 py-1 text-xs text-gray-400 transition-colors hover:bg-[#23242a] hover:text-white disabled:opacity-50"
+                              className="mt-2 ml-2 text-gray-400 transition-colors hover:text-white disabled:opacity-50"
                               aria-label="Retry message"
                             >
-                              <RotateCcw className="h-3 w-3" />
-                              Retry
+                              <RotateCcw className="h-4 w-4" />
                             </button>
                           )}
-                        </div>
+                        </>
                       )}
                     </div>
                     </motion.div>
@@ -807,7 +1062,7 @@ export function EnhancedChatInterface() {
 
               {/* Scroll anchor at bottom */}
               <div ref={messagesEndRef} />
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
@@ -818,6 +1073,10 @@ export function EnhancedChatInterface() {
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ 
+            duration: 0.4,
+            ease: [0.16, 1, 0.3, 1]
+          }}
           onClick={scrollToBottom}
           className="fixed bottom-24 right-8 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-[#2e2f37] bg-[#1c1d21] shadow-linear-md transition-all hover:bg-[#23242a]"
           aria-label="Scroll to bottom"
