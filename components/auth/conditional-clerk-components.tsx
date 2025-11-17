@@ -9,7 +9,7 @@ interface ConditionalSignedOutProps {
 }
 
 export function ConditionalSignedOut({ children }: ConditionalSignedOutProps) {
-  const [ClerkSignedOut, setClerkSignedOut] = useState<React.ComponentType<{ children: React.ReactNode }> | null>(null);
+  const [ClerkSignedOut, setClerkSignedOut] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function ConditionalSignedOut({ children }: ConditionalSignedOutProps) {
     if (clerkKey) {
       import("@clerk/nextjs")
         .then((mod) => {
-          setClerkSignedOut(() => mod.SignedOut);
+          setClerkSignedOut(mod.SignedOut);
         })
         .catch(() => {
           // Silently fail if Clerk can't be loaded
@@ -39,7 +39,7 @@ interface ConditionalSignedInProps {
 }
 
 export function ConditionalSignedIn({ children }: ConditionalSignedInProps) {
-  const [ClerkSignedIn, setClerkSignedIn] = useState<React.ComponentType<{ children: React.ReactNode }> | null>(null);
+  const [ClerkSignedIn, setClerkSignedIn] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export function ConditionalSignedIn({ children }: ConditionalSignedInProps) {
     if (clerkKey) {
       import("@clerk/nextjs")
         .then((mod) => {
-          setClerkSignedIn(() => mod.SignedIn);
+          setClerkSignedIn(mod.SignedIn);
         })
         .catch(() => {
           // Silently fail if Clerk can't be loaded
@@ -69,7 +69,7 @@ interface ConditionalUserButtonProps {
 }
 
 export function ConditionalUserButton({ appearance }: ConditionalUserButtonProps) {
-  const [ClerkUserButton, setClerkUserButton] = useState<React.ComponentType<{ appearance?: any }> | null>(null);
+  const [ClerkUserButton, setClerkUserButton] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function ConditionalUserButton({ appearance }: ConditionalUserButtonProps
     if (clerkKey) {
       import("@clerk/nextjs")
         .then((mod) => {
-          setClerkUserButton(() => mod.UserButton);
+          setClerkUserButton(mod.UserButton);
         })
         .catch(() => {
           // Silently fail if Clerk can't be loaded
@@ -99,7 +99,7 @@ interface ConditionalSignInProps {
 }
 
 export function ConditionalSignIn({ routing, appearance }: ConditionalSignInProps) {
-  const [ClerkSignIn, setClerkSignIn] = useState<React.ComponentType<{ routing?: string; appearance?: any }> | null>(null);
+  const [ClerkSignIn, setClerkSignIn] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export function ConditionalSignIn({ routing, appearance }: ConditionalSignInProp
     if (clerkKey) {
       import("@clerk/nextjs")
         .then((mod) => {
-          setClerkSignIn(() => mod.SignIn);
+          setClerkSignIn(mod.SignIn);
         })
         .catch(() => {
           // Silently fail if Clerk can't be loaded
@@ -133,7 +133,7 @@ interface ConditionalSignUpProps {
 }
 
 export function ConditionalSignUp({ routing, appearance }: ConditionalSignUpProps) {
-  const [ClerkSignUp, setClerkSignUp] = useState<React.ComponentType<{ routing?: string; appearance?: any }> | null>(null);
+  const [ClerkSignUp, setClerkSignUp] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -142,7 +142,7 @@ export function ConditionalSignUp({ routing, appearance }: ConditionalSignUpProp
     if (clerkKey) {
       import("@clerk/nextjs")
         .then((mod) => {
-          setClerkSignUp(() => mod.SignUp);
+          setClerkSignUp(mod.SignUp);
         })
         .catch(() => {
           // Silently fail if Clerk can't be loaded
