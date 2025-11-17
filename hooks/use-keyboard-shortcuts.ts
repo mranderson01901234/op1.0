@@ -14,6 +14,8 @@ interface ShortcutHandlers {
  */
 export function useKeyboardShortcuts({ onNewChat, onSend }: ShortcutHandlers) {
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Cmd+K or Ctrl+K: New chat
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {

@@ -62,7 +62,6 @@ export function AuthButtons() {
               card: "bg-elevated",
               cardBox: "bg-elevated",
             },
-            baseTheme: "dark",
             variables: {
               colorBackground: "#1a1a1a",
               colorText: "#ffffff",

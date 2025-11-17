@@ -8,6 +8,8 @@ export function Header() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const handleStorage = () => {
       const saved = localStorage.getItem("sidebar-collapsed");
       if (saved) {

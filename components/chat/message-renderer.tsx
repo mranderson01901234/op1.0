@@ -27,7 +27,8 @@ export function MessageRenderer({ content, isUser }: MessageRendererProps) {
         remarkPlugins={[remarkGfm]}
         components={{
           // Code blocks
-          code({ node, inline, className, children, ...props }) {
+          code({ node, className, children, ...props }: any) {
+            const inline = !className;
             const match = /language-(\w+)/.exec(className || "");
             const language = match ? match[1] : "text";
 

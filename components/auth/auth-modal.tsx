@@ -213,7 +213,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                         formFieldSuccessText: "text-green-400",
                         formFieldErrorText: "text-red-400",
                       },
-                      baseTheme: "dark",
                       variables: {
                         colorInputText: "#ffffff",
                         colorInputBackground: "#141414",
@@ -221,7 +220,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                         colorText: "#ffffff",
                         colorTextSecondary: "#a0a0a0",
                         colorBackground: "#1a1a1a",
-                        colorInputPlaceholder: "#6e6e70",
                       },
                     }}
                   />
@@ -249,7 +247,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                         formFieldSuccessText: "text-green-400",
                         formFieldErrorText: "text-red-400",
                       },
-                      baseTheme: "dark",
                       variables: {
                         colorInputText: "#ffffff",
                         colorInputBackground: "#141414",
@@ -257,7 +254,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                         colorText: "#ffffff",
                         colorTextSecondary: "#a0a0a0",
                         colorBackground: "#1a1a1a",
-                        colorInputPlaceholder: "#6e6e70",
                       },
                     }}
                   />
