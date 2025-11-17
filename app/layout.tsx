@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ConditionalClerkProvider } from "@/components/providers/conditional-clerk-provider";
 
 export const metadata: Metadata = {
   title: "OperaStudio - Premium Chat Interface",
@@ -15,15 +15,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body>
-          <ErrorBoundary>
+    <html lang="en">
+      <body>
+        <ErrorBoundary>
+          <ConditionalClerkProvider>
             {children}
             <ToastProvider />
-          </ErrorBoundary>
-        </body>
-      </html>
-    </ClerkProvider>
+          </ConditionalClerkProvider>
+        </ErrorBoundary>
+      </body>
+    </html>
   );
 }

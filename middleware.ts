@@ -1,6 +1,25 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+// Only use Clerk middleware if the publishable key is set
+// This prevents build errors when keys are not configured
+let middleware: any;
 
-export default clerkMiddleware();
+try {
+  if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    const { clerkMiddleware } = require("@clerk/nextjs/server");
+    middleware = clerkMiddleware();
+  } else {
+    // No-op middleware when Clerk is not configured
+    middleware = (req: any) => {
+      return new Response(null, { status: 200 });
+    };
+  }
+} catch (error) {
+  // Fallback if Clerk fails to initialize
+  middleware = (req: any) => {
+    return new Response(null, { status: 200 });
+  };
+}
+
+export default middleware;
 
 export const config = {
   matcher: [

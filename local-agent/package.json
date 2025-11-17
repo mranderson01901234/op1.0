@@ -1,0 +1,29 @@
+{
+  "name": "@operastudio/local-agent",
+  "version": "1.0.0",
+  "description": "OperaStudio Local Environment Assistant Agent",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "build:binaries": "pnpm build && pkg . --targets node18-win-x64,node18-linux-x64 --output-path dist/binaries",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/ws": "^8.5.13",
+    "pkg": "^5.8.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.9.0"
+  },
+  "pkg": {
+    "targets": [
+      "node18-win-x64",
+      "node18-linux-x64"
+    ],
+    "outputPath": "dist/binaries"
+  }
+}
