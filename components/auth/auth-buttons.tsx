@@ -1,9 +1,9 @@
 "use client";
 
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { LogIn, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { AuthModal } from "./auth-modal";
+import { ConditionalSignedIn, ConditionalSignedOut, ConditionalUserButton } from "./conditional-clerk-components";
 
 export function AuthButtons() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -21,7 +21,7 @@ export function AuthButtons() {
 
   return (
     <>
-      <SignedOut>
+      <ConditionalSignedOut>
         <div className="flex items-center gap-2">
           <button
             onClick={openSignIn}
@@ -38,10 +38,10 @@ export function AuthButtons() {
             Sign Up
           </button>
         </div>
-      </SignedOut>
+      </ConditionalSignedOut>
       
-      <SignedIn>
-        <UserButton 
+      <ConditionalSignedIn>
+        <ConditionalUserButton 
           appearance={{
             elements: {
               avatarBox: "h-8 w-8",
@@ -71,7 +71,7 @@ export function AuthButtons() {
             },
           }}
         />
-      </SignedIn>
+      </ConditionalSignedIn>
 
       <AuthModal
         isOpen={authModalOpen}

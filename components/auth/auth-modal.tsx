@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { SignIn, SignUp } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { ConditionalSignIn, ConditionalSignUp } from "./conditional-clerk-components";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -190,7 +190,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
               {/* Clerk Component */}
               <div className="p-6 pt-12">
                 {currentMode === "sign-in" ? (
-                  <SignIn 
+                  <ConditionalSignIn 
                     routing="virtual"
                     appearance={{
                       elements: {
@@ -224,7 +224,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                     }}
                   />
                 ) : (
-                  <SignUp
+                  <ConditionalSignUp
                     routing="virtual"
                     appearance={{
                       elements: {
