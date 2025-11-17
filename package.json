@@ -11,6 +11,7 @@
   "dependencies": {
     "@clerk/nextjs": "^6.35.1",
     "@google/generative-ai": "^0.24.1",
+    "@leaningtech/cheerpx": "^1.2.0",
     "@monaco-editor/react": "^4.7.0",
     "@types/pg": "^8.15.6",
     "class-variance-authority": "^0.7.0",
