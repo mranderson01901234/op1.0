@@ -1,15 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sidebar } from "./sidebar";
-import { Header } from "./header";
+import { AuthButtons } from "@/components/auth/auth-buttons";
 import { cn } from "@/lib/utils";
 
-interface AppLayoutProps {
-  children: React.ReactNode;
-}
-
-export function AppLayout({ children }: AppLayoutProps) {
+export function Header() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -33,17 +28,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      <Sidebar />
-      <Header />
-      <main
-        className={cn(
-          "flex flex-1 h-screen flex-col transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-          sidebarCollapsed ? "ml-16 pt-16" : "ml-[280px] pt-16"
-        )}
-      >
-        {children}
-      </main>
-    </div>
+    <header 
+      className={cn(
+        "fixed top-0 right-0 z-40 flex h-16 items-center justify-end px-6 bg-background/80 backdrop-blur-sm transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+        sidebarCollapsed ? "left-16" : "left-[280px]"
+      )}
+    >
+      <AuthButtons />
+    </header>
   );
 }
+

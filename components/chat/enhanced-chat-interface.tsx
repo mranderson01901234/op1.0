@@ -30,7 +30,7 @@ import { MessageRenderer } from "./message-renderer";
 import { WelcomeScreen } from "./welcome-screen";
 import { ProcessingIndicator } from "../ui/processing-indicator";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
-import { saveConversation, getConversations } from "@/lib/storage";
+import { saveConversation, getConversations, getConversation } from "@/lib/storage";
 import { generateConversationTitle } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Message, Conversation } from "@/lib/types";
@@ -613,11 +613,34 @@ export function EnhancedChatInterface() {
       setCurrentConversationId(lastConversation.id);
       setMessages(lastConversation.messages);
       positionedMessageIdsRef.current.clear(); // Reset for loaded conversation
+      // Dispatch event to notify sidebar of current conversation
+      window.dispatchEvent(new CustomEvent('conversation-changed', { detail: lastConversation.id }));
     } else {
       // Create new conversation
       setCurrentConversationId(`conv_${Date.now()}`);
       positionedMessageIdsRef.current.clear(); // Reset for new conversation
     }
+  }, []);
+
+  // Listen for load-conversation events from sidebar
+  useEffect(() => {
+    const handleLoadConversation = (event: CustomEvent<string>) => {
+      const conversationId = event.detail;
+      const conversation = getConversation(conversationId);
+      
+      if (conversation) {
+        setCurrentConversationId(conversation.id);
+        setMessages(conversation.messages);
+        positionedMessageIdsRef.current.clear();
+        // Dispatch event to notify sidebar of current conversation
+        window.dispatchEvent(new CustomEvent('conversation-changed', { detail: conversation.id }));
+      }
+    };
+
+    window.addEventListener('load-conversation', handleLoadConversation as EventListener);
+    return () => {
+      window.removeEventListener('load-conversation', handleLoadConversation as EventListener);
+    };
   }, []);
 
   // Save conversation to localStorage
@@ -633,6 +656,8 @@ export function EnhancedChatInterface() {
     };
 
     saveConversation(conversation);
+    // Dispatch event to notify sidebar of conversation save
+    window.dispatchEvent(new CustomEvent('conversation-saved'));
   }, [currentConversationId]);
 
   const handleNewChat = useCallback(() => {
@@ -656,7 +681,10 @@ export function EnhancedChatInterface() {
     setPositioningMessageId(null); // Clear positioning state
     setPositioningResponseId(null); // Clear response positioning state
     positionedMessageIdsRef.current.clear(); // Reset positioned messages for new chat
-    setCurrentConversationId(`conv_${Date.now()}`);
+    const newConversationId = `conv_${Date.now()}`;
+    setCurrentConversationId(newConversationId);
+    // Dispatch event to notify sidebar of new conversation
+    window.dispatchEvent(new CustomEvent('conversation-changed', { detail: newConversationId }));
     toast.success("Started new conversation");
   }, [messages, currentConversationId, saveCurrentConversation]);
 

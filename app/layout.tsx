@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -14,13 +15,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
-        <ErrorBoundary>
-          {children}
-          <ToastProvider />
-        </ErrorBoundary>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <ErrorBoundary>
+            {children}
+            <ToastProvider />
+          </ErrorBoundary>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
