@@ -1,0 +1,156 @@
+
+> operastudio-chat@0.1.0 dev /home/dp/Documents/op1.0
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+ ⚠ Port 3001 is in use, trying 3002 instead.
+  ▲ Next.js 14.2.33
+  - Local:        http://localhost:3002
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.7s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1247ms (188 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (176kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ○ Compiling / ...
+ ✓ Compiled / in 16.2s (3496 modules)
+ GET / 200 in 16728ms
+ POST / 200 in 97ms
+ ○ Compiling /api/agent/status ...
+ ✓ Compiled /api/agent/status in 2.3s (2001 modules)
+✅ Redis connected
+ POST / 200 in 2920ms
+ GET /api/agent/status 200 in 3011ms
+ GET /api/agent/status 200 in 21ms
+ ✓ Compiled /api/chat in 451ms (2010 modules)
+✅ Redis connected
+ POST /api/chat 200 in 1965ms
+ GET /api/agent/status 200 in 24ms
+[SEARCH] Performing web search for: "search for the latest news in AI"
+[SEARCH] Found 8 results
+ GET /api/agent/status 200 in 24ms
+ POST /api/chat 200 in 3159ms
+ GET /api/agent/status 200 in 19ms
+ GET /api/agent/status 200 in 30ms
+ GET / 200 in 295ms
+ POST / 200 in 66ms
+ POST / 200 in 43ms
+ GET /api/agent/status 200 in 49ms
+ GET /api/agent/status 200 in 21ms
+ GET /api/agent/status 200 in 55ms
+ GET /api/agent/status 200 in 33ms
+ GET /api/agent/status 200 in 26ms
+ GET /api/agent/status 200 in 21ms
+ GET /api/agent/status 200 in 20ms
+ GET /api/agent/status 200 in 33ms
+ GET /api/agent/status 200 in 32ms
+ GET /api/agent/status 200 in 29ms
+ GET /api/agent/status 200 in 44ms
+ GET /api/agent/status 200 in 39ms
+ GET /api/agent/status 200 in 28ms
+ ✓ Compiled in 2.3s (1694 modules)
+ GET /api/agent/status 200 in 50ms
+ GET /api/agent/status 200 in 19ms
+ ✓ Compiled in 616ms (1694 modules)
+ GET /api/agent/status 200 in 17ms
+ ✓ Compiled in 552ms (1694 modules)
+ GET /api/agent/status 200 in 14ms
+ GET /api/agent/status 200 in 32ms
+ ✓ Compiled in 569ms (1694 modules)
+ GET /api/agent/status 200 in 15ms
+ GET /api/agent/status 200 in 17ms
+ ✓ Compiled in 643ms (1694 modules)
+ GET /api/agent/status 200 in 15ms
+ ✓ Compiled in 914ms (1694 modules)
+ GET /api/agent/status 200 in 16ms
+ GET /api/agent/status 200 in 15ms
+ ✓ Compiled in 513ms (1694 modules)
+ GET /api/agent/status 200 in 29ms
+ GET /api/agent/status 200 in 27ms
+ GET /api/agent/status 200 in 43ms
+ ✓ Compiled in 3.6s (3685 modules)
+ ✓ Compiled in 1523ms (3685 modules)
+✅ Redis connected
+ GET /api/agent/status 200 in 216ms
+ GET /api/agent/status 200 in 80ms
+ ✓ Compiled in 3s (3721 modules)
+✅ Redis connected
+ GET /api/agent/status 200 in 101ms
+ ✓ Compiled in 1603ms (3721 modules)
+✅ Redis connected
+ GET /api/agent/status 200 in 35ms
+ GET /api/agent/status 200 in 26ms
+ GET /api/agent/status 200 in 39ms
+ GET /api/agent/status 200 in 34ms
+ GET /api/agent/status 200 in 38ms
+ GET /api/agent/status 200 in 37ms
+ GET /api/agent/status 200 in 27ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/dp/Documents/op1.0/.next/cache/webpack/server-development/0.pack.gz_' -> '/home/dp/Documents/op1.0/.next/cache/webpack/server-development/0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/dp/Documents/op1.0/.next/cache/webpack/client-development/5.pack.gz_' -> '/home/dp/Documents/op1.0/.next/cache/webpack/client-development/5.pack.gz'
+ GET /api/agent/status 200 in 29ms
+ GET /api/agent/status 200 in 32ms
+ GET /api/agent/status 200 in 34ms
+ GET /api/agent/status 200 in 31ms
+ GET /api/agent/status 200 in 33ms
+ GET /api/agent/status 200 in 27ms
+ GET /api/agent/status 200 in 32ms
+ GET /api/agent/status 200 in 36ms
+ GET / 200 in 276ms
+ POST / 200 in 95ms
+ GET /api/agent/status 200 in 23ms
+ GET /api/agent/status 200 in 25ms
+ POST / 200 in 26ms
+ GET /api/agent/status 200 in 28ms
+ ○ Compiling /api/chat ...
+ ✓ Compiled /api/chat in 648ms (2023 modules)
+✅ Redis connected
+ POST /api/chat 200 in 2085ms
+ GET /api/agent/status 200 in 29ms
+ GET /api/agent/status 200 in 33ms
+ POST /api/chat 200 in 1179ms
+ GET /api/agent/status 200 in 22ms
+ GET /api/agent/status 200 in 17ms
+ GET /api/agent/status 200 in 31ms
+ GET /api/agent/status 200 in 35ms
+ GET /api/agent/status 200 in 31ms
+ GET /api/agent/status 200 in 33ms
+ GET / 200 in 260ms
+ POST / 200 in 71ms
+ POST / 200 in 22ms
+ GET /api/agent/status 200 in 27ms
+ GET /api/agent/status 200 in 33ms
+ GET /api/agent/status 200 in 20ms
+ POST /api/chat 200 in 1584ms
+ GET /api/agent/status 200 in 26ms
+ GET /api/agent/status 200 in 33ms
+ GET /api/agent/status 200 in 28ms
+ GET /api/agent/status 200 in 31ms
+ GET /api/agent/status 200 in 30ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 1107ms (3717 modules)
+ GET /api/agent/status 404 in 1340ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /_next/static/webpack/619ed3b0e9e9ed3d.webpack.hot-update.json 404 in 132ms
+ GET / 200 in 99ms
+ GET /_next/static/css/app/layout.css?v=1763366310753 404 in 187ms
+ GET /_next/static/chunks/main-app.js?v=1763366310753 404 in 161ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 159ms
+ GET /_next/static/chunks/app/layout.js 404 in 155ms
+ GET /_next/static/chunks/app/page.js 404 in 161ms
+ ✓ Compiled in 1623ms (3722 modules)
+ ✓ Compiled in 1418ms (3722 modules)
+ ✓ Compiled in 1912ms (3722 modules)
+ GET / 200 in 170ms
+ ✓ Compiled in 1560ms (3522 modules)
+ GET / 200 in 309ms
+ ✓ Compiled /_not-found in 359ms (1816 modules)
+ GET /_next/static/css/app/layout.css?v=1763366408651 404 in 602ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 570ms
+ GET /_next/static/chunks/main-app.js?v=1763366408651 404 in 575ms
+ GET / 200 in 87ms
+ GET /_next/static/css/app/layout.css?v=1763366443305 404 in 102ms
+ GET /_next/static/chunks/main-app.js?v=1763366443305 404 in 93ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 90ms
+ ELIFECYCLE  Command failed.
+[?25h

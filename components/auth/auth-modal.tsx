@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@clerk/nextjs";
 import { ConditionalSignIn, ConditionalSignUp } from "./conditional-clerk-components";
 
 interface AuthModalProps {
@@ -16,10 +17,18 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProps) {
   const [currentMode, setCurrentMode] = useState(mode);
   const [mounted, setMounted] = useState(false);
-  const lastPathnameRef = useRef(window.location.pathname);
+  const lastPathnameRef = useRef<string>("/");
+  
+  // Use Clerk's useUser hook to detect successful sign-in
+  // This will work if ClerkProvider is available, otherwise it returns default values
+  const { isSignedIn, isLoaded } = useUser();
 
   useEffect(() => {
     setMounted(true);
+    // Initialize pathname ref only on client
+    if (typeof window !== "undefined") {
+      lastPathnameRef.current = window.location.pathname;
+    }
     return () => setMounted(false);
   }, []);
 
@@ -27,9 +36,20 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
     setCurrentMode(mode);
   }, [mode]);
 
+  // Close modal when user successfully signs in
+  useEffect(() => {
+    if (isLoaded && isSignedIn && isOpen) {
+      // Small delay to allow Clerk to finish processing
+      const timer = setTimeout(() => {
+        onClose();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isSignedIn, isLoaded, isOpen, onClose]);
+
   // Intercept Clerk's internal navigation to keep everything in modal
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || typeof window === "undefined") return;
 
     // Intercept clicks on footer links that would navigate to /sign-in or /sign-up
     const interceptNavigation = (e: MouseEvent) => {
@@ -61,6 +81,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
     };
 
     const handleHashChange = () => {
+      if (typeof window === "undefined") return;
       const hash = window.location.hash;
       // Check for sign-up in hash
       if (hash.includes("sign-up") && currentMode !== "sign-up") {
@@ -76,6 +97,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
 
     // Intercept Next.js router navigation
     const handlePopState = (e: PopStateEvent) => {
+      if (typeof window === "undefined") return;
       const path = window.location.pathname;
       if (path.includes('/sign-up') || path.includes('/signup')) {
         e.preventDefault();
@@ -96,6 +118,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
 
     // Monitor pathname changes to catch any navigation
     const checkPathname = () => {
+      if (typeof window === "undefined") return;
       const currentPathname = window.location.pathname;
       if (currentPathname !== lastPathnameRef.current) {
         lastPathnameRef.current = currentPathname;
@@ -267,7 +290,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   );
 
   // Render modal to document body using portal to avoid parent positioning constraints
-  if (!mounted) return null;
+  if (!mounted || typeof window === "undefined" || typeof document === "undefined") return null;
   return createPortal(modalContent, document.body);
 }
 

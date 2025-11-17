@@ -3,6 +3,7 @@ import "./globals.css";
 import { ToastProvider } from "@/components/providers/toast-provider";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { ConditionalClerkProvider } from "@/components/providers/conditional-clerk-provider";
+import { AuthStateListener } from "@/components/auth/auth-state-listener";
 
 export const metadata: Metadata = {
   title: "OperaStudio - Premium Chat Interface",
@@ -19,6 +20,7 @@ export default function RootLayout({
       <body>
         <ErrorBoundary>
           <ConditionalClerkProvider>
+            <AuthStateListener />
             {children}
             <ToastProvider />
           </ConditionalClerkProvider>

@@ -1,4 +1,4 @@
-import { resolve, relative } from 'path';
+import { resolve, relative, basename } from 'path';
 import { homedir } from 'os';
 import { loadConfig } from '../config';
 import * as logger from '../logger';
@@ -8,7 +8,69 @@ export type PermissionMode = 'safe' | 'balanced' | 'unrestricted';
 export interface PermissionCheck {
   allowed: boolean;
   reason?: string;
+  requiresConfirmation?: boolean;
+  fileType?: 'critical' | 'safe' | 'destructive';
 }
+
+/**
+ * Critical files that always require user confirmation in balanced mode
+ */
+const CRITICAL_FILES = [
+  '.env',
+  '.env.local',
+  '.env.production',
+  '.env.development',
+  'package.json',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'tsconfig.json',
+  'jsconfig.json',
+  'next.config.js',
+  'next.config.mjs',
+  'webpack.config.js',
+  'vite.config.js',
+  'vite.config.ts',
+  '.gitignore',
+  'Dockerfile',
+  'docker-compose.yml',
+  'credentials.json',
+  'service-account.json',
+];
+
+/**
+ * Critical directories that require confirmation
+ */
+const CRITICAL_DIRS = [
+  '.git',
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+];
+
+/**
+ * Safe directories where files can be auto-approved in balanced mode
+ */
+const SAFE_DIRS = [
+  'src',
+  'app',
+  'pages',
+  'components',
+  'lib',
+  'utils',
+  'helpers',
+  'hooks',
+  'tests',
+  '__tests__',
+  'test',
+  'spec',
+  'styles',
+  'public',
+  'assets',
+  'docs',
+  'documentation',
+];
 
 /**
  * Dangerous commands blocked in 'safe' and 'balanced' modes
@@ -107,7 +169,7 @@ export function isCommandAllowed(command: string): PermissionCheck {
  * Check if file operation is allowed
  */
 export function checkFileOperation(
-  operation: 'read' | 'write' | 'list',
+  operation: 'read' | 'write' | 'list' | 'delete',
   path: string
 ): PermissionCheck {
   const config = loadConfig();
@@ -119,12 +181,12 @@ export function checkFileOperation(
     return pathCheck;
   }
 
-  // In 'safe' mode, only allow read operations
-  if (mode === 'safe' && operation === 'write') {
-    logger.warn(`Write operation blocked in 'safe' mode: ${path}`);
+  // In 'safe' mode, only allow read and list operations
+  if (mode === 'safe' && (operation === 'write' || operation === 'delete')) {
+    logger.warn(`${operation} operation blocked in 'safe' mode: ${path}`);
     return {
       allowed: false,
-      reason: "Write operations are not allowed in 'safe' mode. Change to 'balanced' or 'unrestricted' mode.",
+      reason: `${operation} operations are not allowed in 'safe' mode. Change to 'balanced' or 'unrestricted' mode.`,
     };
   }
 
@@ -155,4 +217,132 @@ export function getAllowedDirectories(): string[] {
     logger.error('Failed to load allowed directories, defaulting to home', error);
     return [homedir()];
   }
+}
+
+/**
+ * Check if a file is critical and requires confirmation
+ */
+export function isCriticalFile(path: string): boolean {
+  const fileName = basename(path);
+  return CRITICAL_FILES.includes(fileName);
+}
+
+/**
+ * Check if a path is in a critical directory
+ */
+export function isInCriticalDirectory(path: string): boolean {
+  const absolutePath = resolve(path);
+  const pathParts = absolutePath.split('/');
+
+  return CRITICAL_DIRS.some(criticalDir => pathParts.includes(criticalDir));
+}
+
+/**
+ * Check if a path is in a safe directory
+ */
+export function isInSafeDirectory(path: string): boolean {
+  const absolutePath = resolve(path);
+  const pathParts = absolutePath.split('/');
+
+  return SAFE_DIRS.some(safeDir => pathParts.includes(safeDir));
+}
+
+/**
+ * Determine if a file operation requires user confirmation based on permission mode and file type
+ */
+export function requiresConfirmation(
+  operation: 'read' | 'write' | 'list' | 'delete',
+  path: string
+): PermissionCheck {
+  const config = loadConfig();
+  const mode = config.permissions.mode;
+
+  // Unrestricted mode never requires confirmation
+  if (mode === 'unrestricted') {
+    return {
+      allowed: true,
+      requiresConfirmation: false,
+      fileType: 'safe',
+    };
+  }
+
+  // Safe mode blocks all writes/deletes (already handled by checkFileOperation)
+  if (mode === 'safe') {
+    return {
+      allowed: false,
+      requiresConfirmation: false,
+      fileType: 'safe',
+    };
+  }
+
+  // Balanced mode: Smart confirmation logic
+  if (mode === 'balanced') {
+    // Read and list operations don't need confirmation
+    if (operation === 'read' || operation === 'list') {
+      return {
+        allowed: true,
+        requiresConfirmation: false,
+        fileType: 'safe',
+      };
+    }
+
+    // Check if file is critical
+    if (isCriticalFile(path)) {
+      logger.info(`Critical file detected: ${path} - requires confirmation`);
+      return {
+        allowed: true,
+        requiresConfirmation: true,
+        fileType: 'critical',
+        reason: 'This is a critical file that requires user confirmation',
+      };
+    }
+
+    // Check if in critical directory
+    if (isInCriticalDirectory(path)) {
+      logger.info(`File in critical directory: ${path} - requires confirmation`);
+      return {
+        allowed: true,
+        requiresConfirmation: true,
+        fileType: 'critical',
+        reason: 'This file is in a critical directory',
+      };
+    }
+
+    // Check if delete operation
+    if (operation === 'delete') {
+      logger.info(`Delete operation: ${path} - requires confirmation`);
+      return {
+        allowed: true,
+        requiresConfirmation: true,
+        fileType: 'destructive',
+        reason: 'Delete operations require confirmation',
+      };
+    }
+
+    // Check if in safe directory - auto-approve writes
+    if (isInSafeDirectory(path)) {
+      logger.info(`File in safe directory: ${path} - auto-approved`);
+      return {
+        allowed: true,
+        requiresConfirmation: false,
+        fileType: 'safe',
+      };
+    }
+
+    // Default for balanced mode: require confirmation for writes in unknown locations
+    logger.info(`Unknown location: ${path} - requires confirmation`);
+    return {
+      allowed: true,
+      requiresConfirmation: true,
+      fileType: 'critical',
+      reason: 'File location requires review',
+    };
+  }
+
+  // Default: allow but require confirmation
+  return {
+    allowed: true,
+    requiresConfirmation: true,
+    fileType: 'critical',
+  };
 }

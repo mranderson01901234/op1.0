@@ -1,0 +1,17 @@
+{
+  "userId": "user_35ac5BgHp1EcMQb21sPMyq8Hgm4",
+  "sharedSecret": "4e00c55aa449c6d31b506f52a7b6192d655b694646e5bfb2428e84b7e70e257f",
+  "serverUrl": "ws://localhost:8082",
+  "version": "1.0.0",
+  "autoStart": true,
+  "permissions": {
+    "mode": "balanced",
+    "allowedDirectories": [
+      "/home"
+    ]
+  },
+  "telemetry": {
+    "enabled": true,
+    "anonymize": false
+  }
+}

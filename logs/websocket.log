@@ -1,0 +1,215 @@
+
+> @operastudio/websocket-server@1.0.0 dev /home/dp/Documents/op1.0/websocket-server
+> tsx src/index.ts
+
+============================================================
+OperaStudio WebSocket Server
+============================================================
+Server ID: ws-server-1
+Port: 8082
+Environment: development
+============================================================
+Initializing connections...
+Redis client connected
+✓ Redis connected
+
+✓ WebSocket server listening on port 8082
+
+Endpoints:
+  WebSocket: ws://localhost:8082
+  Health:    http://localhost:8082/health
+  Metrics:   http://localhost:8082/metrics
+
+Server is ready to accept connections.
+
+New connection attempt from user: user_35ac5BgHp1EcMQb21sPMyq8Hgm4
+Database pool connected
+Registered agent user_35ac5BgHp1EcMQb21sPMyq8Hgm4 on server ws-server-448383
+Redis subscriber connected
+Subscribed to commands for agent user_35ac5BgHp1EcMQb21sPMyq8Hgm4
+Agent user_35ac5BgHp1EcMQb21sPMyq8Hgm4 connected successfully
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: j4pYn-PT3Nu73BooBAJVs
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request j4pYn-PT3Nu73BooBAJVs: { success: true }
+Redis publisher connected
+Published tool response for request j4pYn-PT3Nu73BooBAJVs
+Database pool connected
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: 1tcsB7Q88xCneTGBd-qNo
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: 14ZxrrMHOc-XxVEYaro3c
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request 1tcsB7Q88xCneTGBd-qNo: { success: true }
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request 14ZxrrMHOc-XxVEYaro3c: { success: true }
+Published tool response for request 1tcsB7Q88xCneTGBd-qNo
+Published tool response for request 14ZxrrMHOc-XxVEYaro3c
+Database pool connected
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: GTLwuMJOvFfXqwFJjHga4
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request GTLwuMJOvFfXqwFJjHga4: { success: true }
+Published tool response for request GTLwuMJOvFfXqwFJjHga4
+[Metrics] Connections: 1, Uptime: 60s
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: iMQhJGnhzoe41lJ1ugXdB
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request iMQhJGnhzoe41lJ1ugXdB: { success: true }
+Published tool response for request iMQhJGnhzoe41lJ1ugXdB
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: 2p-wFqdt9m-l5TCEWSIXp
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: kCnsTE79MmPBtIazwEAp1
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request 2p-wFqdt9m-l5TCEWSIXp: { success: true }
+Published tool response for request 2p-wFqdt9m-l5TCEWSIXp
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request kCnsTE79MmPBtIazwEAp1: { success: true }
+Published tool response for request kCnsTE79MmPBtIazwEAp1
+Forwarding tool call to user_35ac5BgHp1EcMQb21sPMyq8Hgm4: OfN49AilaCssPHiIqRS55
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: tool_response
+Tool response from user_35ac5BgHp1EcMQb21sPMyq8Hgm4 for request OfN49AilaCssPHiIqRS55: { success: true }
+Published tool response for request OfN49AilaCssPHiIqRS55
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 120s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 180s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 240s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 300s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 360s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 420s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 480s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 540s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 600s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 660s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 720s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 780s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 840s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 900s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 960s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1020s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1080s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1140s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1200s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1260s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1320s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1380s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1441s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1501s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1561s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1621s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1681s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1741s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1801s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1861s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1921s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 1981s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2041s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2101s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2161s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2221s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2281s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2341s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2401s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2461s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2521s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2581s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2641s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2701s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2761s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2821s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2881s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 2941s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat
+[Metrics] Connections: 1, Uptime: 3001s
+Message from user_35ac5BgHp1EcMQb21sPMyq8Hgm4: heartbeat

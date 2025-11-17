@@ -1,0 +1,202 @@
+
+> @operastudio/local-agent@1.0.0 dev /home/dp/Documents/op1.0/local-agent
+> tsx src/index.ts
+
+ℹ️  Starting OperaStudio Local Agent... 
+ℹ️  Configuration loaded {
+  userId: 'user_35ac5BgHp1EcMQb21sPMyq8Hgm4',
+  serverUrl: 'ws://localhost:8082',
+  version: '1.0.0',
+  permissionMode: 'balanced'
+}
+ℹ️  Connecting to server: ws://localhost:8082 
+ℹ️  Agent started successfully 
+ℹ️  Log file: /home/dp/.operastudio/agent.log 
+ℹ️  Connected to server 
+ℹ️  Received message: connected { requestId: undefined }
+ℹ️  Server confirmed connection {
+  type: 'connected',
+  userId: 'user_35ac5BgHp1EcMQb21sPMyq8Hgm4',
+  timestamp: 1763376288141,
+  serverId: 'ws-server-448383'
+}
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: tool_call { requestId: 'j4pYn-PT3Nu73BooBAJVs' }
+ℹ️  Executing tool call: list_directory {
+  requestId: 'j4pYn-PT3Nu73BooBAJVs',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 8ms { requestId: 'j4pYn-PT3Nu73BooBAJVs', success: true }
+ℹ️  Received message: tool_call { requestId: '1tcsB7Q88xCneTGBd-qNo' }
+ℹ️  Executing tool call: list_directory {
+  requestId: '1tcsB7Q88xCneTGBd-qNo',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Received message: tool_call { requestId: '14ZxrrMHOc-XxVEYaro3c' }
+ℹ️  Executing tool call: list_directory {
+  requestId: '14ZxrrMHOc-XxVEYaro3c',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 12ms { requestId: '1tcsB7Q88xCneTGBd-qNo', success: true }
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 11ms { requestId: '14ZxrrMHOc-XxVEYaro3c', success: true }
+ℹ️  Received message: tool_call { requestId: 'GTLwuMJOvFfXqwFJjHga4' }
+ℹ️  Executing tool call: read_file {
+  requestId: 'GTLwuMJOvFfXqwFJjHga4',
+  params: { path: '/home/dp/Documents/op1.0/ARCHITECTURE_REPORT.md' }
+}
+ℹ️  Executing tool: read_file { params: { path: '/home/dp/Documents/op1.0/ARCHITECTURE_REPORT.md' } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0/ARCHITECTURE_REPORT.md is within /home 
+ℹ️  Reading file: /home/dp/Documents/op1.0/ARCHITECTURE_REPORT.md 
+ℹ️  Successfully read file: /home/dp/Documents/op1.0/ARCHITECTURE_REPORT.md (44945 bytes) 
+ℹ️  Tool call completed: read_file in 5ms { requestId: 'GTLwuMJOvFfXqwFJjHga4', success: true }
+ℹ️  Received message: tool_call { requestId: 'iMQhJGnhzoe41lJ1ugXdB' }
+ℹ️  Executing tool call: list_directory {
+  requestId: 'iMQhJGnhzoe41lJ1ugXdB',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 10ms { requestId: 'iMQhJGnhzoe41lJ1ugXdB', success: true }
+ℹ️  Received message: tool_call { requestId: '2p-wFqdt9m-l5TCEWSIXp' }
+ℹ️  Executing tool call: list_directory {
+  requestId: '2p-wFqdt9m-l5TCEWSIXp',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Received message: tool_call { requestId: 'kCnsTE79MmPBtIazwEAp1' }
+ℹ️  Executing tool call: list_directory {
+  requestId: 'kCnsTE79MmPBtIazwEAp1',
+  params: { path: '/home/dp/Documents/op1.0', recursive: false }
+}
+ℹ️  Executing tool: list_directory { params: { path: '/home/dp/Documents/op1.0', recursive: false } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0 is within /home 
+ℹ️  Listing files in: /home/dp/Documents/op1.0 (recursive: false) 
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 7ms { requestId: '2p-wFqdt9m-l5TCEWSIXp', success: true }
+ℹ️  Found 70 items in: /home/dp/Documents/op1.0 
+ℹ️  Tool call completed: list_directory in 7ms { requestId: 'kCnsTE79MmPBtIazwEAp1', success: true }
+ℹ️  Received message: tool_call { requestId: 'OfN49AilaCssPHiIqRS55' }
+ℹ️  Executing tool call: read_file {
+  requestId: 'OfN49AilaCssPHiIqRS55',
+  params: { path: '/home/dp/Documents/op1.0/PHASE_2_COMPLETE.md' }
+}
+ℹ️  Executing tool: read_file { params: { path: '/home/dp/Documents/op1.0/PHASE_2_COMPLETE.md' } }
+ℹ️  Path allowed: /home/dp/Documents/op1.0/PHASE_2_COMPLETE.md is within /home 
+ℹ️  Reading file: /home/dp/Documents/op1.0/PHASE_2_COMPLETE.md 
+ℹ️  Successfully read file: /home/dp/Documents/op1.0/PHASE_2_COMPLETE.md (8146 bytes) 
+ℹ️  Tool call completed: read_file in 1ms { requestId: 'OfN49AilaCssPHiIqRS55', success: true }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }
+ℹ️  Received message: heartbeat_ack { requestId: undefined }

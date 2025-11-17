@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -8,13 +9,67 @@ import { CodeBlock } from "./code-block";
 interface MessageRendererProps {
   content: string;
   isUser: boolean;
+  onCitationClick?: (citationIndex: number) => void;
+  onSourceClick?: (url: string, index: number) => void;
+  searchResults?: any[]; // Pass search results to render inline source links
 }
 
-export function MessageRenderer({ content, isUser }: MessageRendererProps) {
+/**
+ * Remove common TLDs from domain names for cleaner display
+ * Examples: wikipedia.org -> wikipedia, nytimes.com -> nytimes
+ */
+const cleanDomain = (domain: string): string => {
+  return domain
+    .replace('www.', '')
+    .replace(/\.(com|org|net|edu|gov|io|co|ai|dev|app)$/i, '');
+};
+
+/**
+ * Process content to convert citation markers [1], [2] into clickable links with domain names
+ */
+const processContentWithCitations = (text: string, searchResults?: any[]): string => {
+  // First, move periods from after citations to before them
+  // Examples: "sentence[1]." -> "sentence.[1]", "text[2], [3]." -> "text.[2], [3]"
+  let processedText = text.replace(/(\[\d+\](?:,?\s*\[\d+\])*)\./g, '.$1');
+
+  if (!searchResults || searchResults.length === 0) {
+    // Fallback to numbered citations if no search results
+    return processedText.replace(/\[(\d+)\]/g, (match, num) => {
+      return `[${match}](#citation-${num})`;
+    });
+  }
+
+  // Replace [1], [2], etc. with domain-based citations like Perplexity
+  return processedText.replace(/\[(\d+)\]/g, (match, num) => {
+    const index = parseInt(num) - 1;
+    const result = searchResults[index];
+    if (result) {
+      // Use domain name from search result and clean it
+      const domain = result.domain || new URL(result.url).hostname.replace('www.', '');
+      const cleanedDomain = cleanDomain(domain);
+      return `[${cleanedDomain}](#citation-${num})`;
+    }
+    return `[${match}](#citation-${num})`;
+  });
+};
+
+export const MessageRenderer = memo(function MessageRenderer({ 
+  content, 
+  isUser, 
+  onCitationClick, 
+  onSourceClick, 
+  searchResults 
+}: MessageRendererProps) {
+  // Memoize expensive citation processing
+  const processedContent = useMemo(() => {
+    if (isUser) return content;
+    return processContentWithCitations(content, searchResults);
+  }, [content, isUser, searchResults]);
+
   if (isUser) {
     return (
       <div className="max-w-[80%] rounded-2xl bg-gradient-card px-5 py-4 shadow-linear-sm">
-        <div className="whitespace-pre-wrap break-words text-[15px] leading-[1.6] text-white">
+        <div className="whitespace-pre-wrap break-words text-[16px] leading-[1.6] text-white">
           {content}
         </div>
       </div>
@@ -64,7 +119,7 @@ export function MessageRenderer({ content, isUser }: MessageRendererProps) {
           ),
           // Paragraphs
           p: ({ children }) => (
-            <p className="my-3 text-[15px] leading-[1.7] text-gray-400">
+            <p className="my-3 text-[16px] leading-[1.7] text-gray-400">
               {children}
             </p>
           ),
@@ -84,7 +139,7 @@ export function MessageRenderer({ content, isUser }: MessageRendererProps) {
             </ol>
           ),
           li: ({ children }) => (
-            <li className="relative pl-6 text-[15px] leading-[1.6] before:absolute before:left-2 before:font-bold before:text-[#6e6e70] before:content-['•']">
+            <li className="relative pl-6 text-[16px] leading-[1.6] before:absolute before:left-2 before:font-bold before:text-[#6e6e70] before:content-['•']">
               {children}
             </li>
           ),
@@ -115,21 +170,74 @@ export function MessageRenderer({ content, isUser }: MessageRendererProps) {
               {children}
             </blockquote>
           ),
-          // Links
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              className="text-blue-400 underline hover:text-blue-300"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {children}
-            </a>
-          ),
+          // Links - handle citations specially
+          a: ({ children, href }) => {
+            // Check if this is a citation link
+            if (href && href.startsWith('#citation-')) {
+              const citationNum = parseInt(href.replace('#citation-', ''));
+              const index = citationNum - 1;
+              const result = searchResults?.[index];
+
+              // Get favicon URL - use Google's favicon service as fallback
+              const faviconUrl = result?.favicon ||
+                `https://www.google.com/s2/favicons?domain=${result?.domain || ''}&sz=32`;
+
+              return (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Open the URL in the right panel
+                    if (result?.url && onSourceClick) {
+                      onSourceClick(result.url, index);
+                    }
+                    // Also trigger citation click for highlighting
+                    onCitationClick?.(index);
+                  }}
+                  className="inline-flex items-center gap-1 align-baseline mx-0.5 text-sm text-blue-400 hover:text-blue-300 transition-colors cursor-pointer underline decoration-blue-400/40 hover:decoration-blue-300/60"
+                  title={result?.title || `Source ${citationNum}`}
+                >
+                  {result && (
+                    <img
+                      src={faviconUrl}
+                      alt=""
+                      className="inline-block w-3.5 h-3.5 rounded-sm"
+                      onError={(e) => {
+                        // Fallback if favicon fails to load
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <span className="font-medium">{children}</span>
+                </button>
+              );
+            }
+
+            // Regular link
+            return (
+              <a
+                href={href}
+                className="text-blue-400 underline hover:text-blue-300"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {children}
+              </a>
+            );
+          },
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison for better performance
+  // Only re-render if content, isUser, or searchResults change
+  return (
+    prevProps.content === nextProps.content &&
+    prevProps.isUser === nextProps.isUser &&
+    prevProps.searchResults === nextProps.searchResults &&
+    prevProps.onCitationClick === nextProps.onCitationClick &&
+    prevProps.onSourceClick === nextProps.onSourceClick
+  );
+});

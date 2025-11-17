@@ -1,0 +1,1114 @@
+Perfect! Now I have a complete understanding of your codebase. Let me write a comprehensive prompt for building the headless Tauri mini browser integration.
+
+```
+Build a headless Tauri mini browser integration for OperaStudio that allows the web application to control a browser running in a desktop app via WebSocket communication.
+
+## Architecture Overview
+
+We're building a **3-tier architecture**:
+
+1. **Next.js Web App** (existing) - Chat interface
+2. **Tauri Desktop App** (NEW) - Headless browser controller
+3. **WebSocket Bridge** (extend existing) - Communication layer
+
+The Tauri app will:
+- Run a headless Chrome/Chromium browser
+- Expose browser control via IPC commands
+- Connect to existing WebSocket server (port 8082)
+- Send page content/screenshots back to web app
+- Allow LLM to control browser via tool calls
+
+## Phase 1: Tauri Project Setup
+
+### Create Tauri Structure
+
+```bash
+# From project root
+npm install -D @tauri-apps/cli@^1.5
+npx tauri init
+
+# Project structure should be:
+op1.0/
+├── src-tauri/              # NEW Tauri Rust code
+│   ├── src/
+│   │   ├── main.rs
+│   │   ├── browser/       # Browser control module
+│   │   └── websocket/     # WS client module
+│   ├── tauri.conf.json
+│   ├── Cargo.toml
+│   └── build.rs
+├── app/                    # Existing Next.js app
+└── components/             # Existing components
+```
+
+### Tauri Configuration
+
+**`src-tauri/tauri.conf.json`:**
+```json
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:3000",
+    "distDir": "../out",
+    "withGlobalTauri": true
+  },
+  "package": {
+    "productName": "OperaStudio Browser",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "window": {
+        "all": false,
+        "create": false,
+        "center": false,
+        "requestUserAttention": false,
+        "setResizable": false,
+        "setTitle": false,
+        "maximize": false,
+        "unmaximize": false,
+        "minimize": false,
+        "unminimize": false,
+        "show": false,
+        "hide": false,
+        "close": false,
+        "setDecorations": false,
+        "setAlwaysOnTop": false,
+        "setContentProtected": false,
+        "setSize": false,
+        "setMinSize": false,
+        "setMaxSize": false,
+        "setPosition": false,
+        "setFullscreen": false,
+        "setFocus": false,
+        "setIcon": false,
+        "setSkipTaskbar": false,
+        "setCursorGrab": false,
+        "setCursorVisible": false,
+        "setCursorIcon": false,
+        "setCursorPosition": false,
+        "setIgnoreCursorEvents": false,
+        "startDragging": false,
+        "print": false
+      }
+    },
+    "bundle": {
+      "active": true,
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "identifier": "com.operastudio.browser",
+      "targets": "all"
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "OperaStudio Browser",
+        "width": 400,
+        "height": 600,
+        "visible": false,
+        "decorations": true,
+        "alwaysOnTop": false
+      }
+    ]
+  }
+}
+```
+
+### Cargo Dependencies
+
+**`src-tauri/Cargo.toml`:**
+```toml
+[package]
+name = "operastudio-browser"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = ["shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.20"
+headless_chrome = "1.0"
+base64 = "0.21"
+url = "2.4"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+```
+
+## Phase 2: Headless Browser Implementation
+
+### Main Browser Controller
+
+**`src-tauri/src/browser/mod.rs`:**
+```rust
+use headless_chrome::{Browser, LaunchOptions, Tab};
+use std::sync::{Arc, Mutex};
+use anyhow::{Result, Context};
+use base64::{Engine as _, engine::general_purpose};
+
+pub struct BrowserManager {
+    browser: Arc<Browser>,
+    active_tab: Arc<Mutex<Option<Arc<Tab>>>>,
+}
+
+impl BrowserManager {
+    pub fn new() -> Result<Self> {
+        let browser = Browser::new(LaunchOptions {
+            headless: true,
+            sandbox: false,
+            enable_gpu: false,
+            window_size: Some((1920, 1080)),
+            ..Default::default()
+        })?;
+
+        Ok(Self {
+            browser: Arc::new(browser),
+            active_tab: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    pub fn navigate(&self, url: &str) -> Result<NavigateResponse> {
+        let tab = self.browser.new_tab()?;
+        
+        tab.navigate_to(url)
+            .context("Failed to navigate")?;
+        
+        tab.wait_until_navigated()
+            .context("Failed to wait for navigation")?;
+
+        let title = tab.get_title().unwrap_or_default();
+        let final_url = tab.get_url();
+
+        // Update active tab
+        *self.active_tab.lock().unwrap() = Some(tab.clone());
+
+        Ok(NavigateResponse {
+            success: true,
+            url: final_url,
+            title,
+        })
+    }
+
+    pub fn get_content(&self) -> Result<PageContent> {
+        let tab = self.active_tab.lock().unwrap();
+        let tab = tab.as_ref().context("No active tab")?;
+
+        let html = tab.get_content()?;
+        let text = tab.evaluate(
+            "document.body.innerText",
+            false
+        )?.value.context("Failed to get text")?
+         .to_string();
+
+        Ok(PageContent {
+            html,
+            text,
+            url: tab.get_url(),
+        })
+    }
+
+    pub fn screenshot(&self) -> Result<String> {
+        let tab = self.active_tab.lock().unwrap();
+        let tab = tab.as_ref().context("No active tab")?;
+
+        let screenshot_data = tab.capture_screenshot(
+            headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
+            None,
+            None,
+            true
+        )?;
+
+        Ok(general_purpose::STANDARD.encode(&screenshot_data))
+    }
+
+    pub fn execute_script(&self, script: &str) -> Result<ScriptResult> {
+        let tab = self.active_tab.lock().unwrap();
+        let tab = tab.as_ref().context("No active tab")?;
+
+        let result = tab.evaluate(script, false)?;
+        
+        Ok(ScriptResult {
+            success: true,
+            result: result.value.map(|v| v.to_string()),
+        })
+    }
+
+    pub fn close_tab(&self) -> Result<()> {
+        let mut tab = self.active_tab.lock().unwrap();
+        if let Some(t) = tab.take() {
+            drop(t);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct NavigateResponse {
+    pub success: bool,
+    pub url: String,
+    pub title: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct PageContent {
+    pub html: String,
+    pub text: String,
+    pub url: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ScriptResult {
+    pub success: bool,
+    pub result: Option<String>,
+}
+```
+
+## Phase 3: WebSocket Client Integration
+
+### WebSocket Connection to Server
+
+**`src-tauri/src/websocket/mod.rs`:**
+```rust
+use tokio_tungstenite::{connect_async, tungstenite::Message};
+use futures_util::{StreamExt, SinkExt};
+use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::browser::BrowserManager;
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum BrowserCommand {
+    #[serde(rename = "navigate")]
+    Navigate { request_id: String, url: String },
+    
+    #[serde(rename = "get_content")]
+    GetContent { request_id: String },
+    
+    #[serde(rename = "screenshot")]
+    Screenshot { request_id: String },
+    
+    #[serde(rename = "execute_script")]
+    ExecuteScript { request_id: String, script: String },
+    
+    #[serde(rename = "close_tab")]
+    CloseTab { request_id: String },
+}
+
+#[derive(Debug, Serialize)]
+struct BrowserResponse {
+    request_id: String,
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+pub struct WebSocketClient {
+    user_id: String,
+    browser: Arc<BrowserManager>,
+}
+
+impl WebSocketClient {
+    pub fn new(user_id: String, browser: Arc<BrowserManager>) -> Self {
+        Self { user_id, browser }
+    }
+
+    pub async fn connect(&self, ws_url: &str) -> Result<()> {
+        let (ws_stream, _) = connect_async(ws_url).await?;
+        let (mut write, mut read) = ws_stream.split();
+
+        // Send authentication
+        let auth_msg = serde_json::json!({
+            "type": "auth",
+            "userId": self.user_id,
+            "clientType": "browser_agent"
+        });
+        write.send(Message::Text(auth_msg.to_string())).await?;
+
+        // Message handling loop
+        while let Some(msg) = read.next().await {
+            match msg? {
+                Message::Text(text) => {
+                    if let Ok(command) = serde_json::from_str::<BrowserCommand>(&text) {
+                        let response = self.handle_command(command).await;
+                        let response_json = serde_json::to_string(&response)?;
+                        write.send(Message::Text(response_json)).await?;
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_command(&self, command: BrowserCommand) -> BrowserResponse {
+        match command {
+            BrowserCommand::Navigate { request_id, url } => {
+                match self.browser.navigate(&url) {
+                    Ok(data) => BrowserResponse {
+                        request_id,
+                        success: true,
+                        data: Some(serde_json::to_value(data).unwrap()),
+                        error: None,
+                    },
+                    Err(e) => BrowserResponse {
+                        request_id,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    }
+                }
+            }
+            BrowserCommand::GetContent { request_id } => {
+                match self.browser.get_content() {
+                    Ok(data) => BrowserResponse {
+                        request_id,
+                        success: true,
+                        data: Some(serde_json::to_value(data).unwrap()),
+                        error: None,
+                    },
+                    Err(e) => BrowserResponse {
+                        request_id,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    }
+                }
+            }
+            BrowserCommand::Screenshot { request_id } => {
+                match self.browser.screenshot() {
+                    Ok(data) => BrowserResponse {
+                        request_id,
+                        success: true,
+                        data: Some(serde_json::json!({ "screenshot": data })),
+                        error: None,
+                    },
+                    Err(e) => BrowserResponse {
+                        request_id,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    }
+                }
+            }
+            BrowserCommand::ExecuteScript { request_id, script } => {
+                match self.browser.execute_script(&script) {
+                    Ok(data) => BrowserResponse {
+                        request_id,
+                        success: true,
+                        data: Some(serde_json::to_value(data).unwrap()),
+                        error: None,
+                    },
+                    Err(e) => BrowserResponse {
+                        request_id,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    }
+                }
+            }
+            BrowserCommand::CloseTab { request_id } => {
+                match self.browser.close_tab() {
+                    Ok(_) => BrowserResponse {
+                        request_id,
+                        success: true,
+                        data: None,
+                        error: None,
+                    },
+                    Err(e) => BrowserResponse {
+                        request_id,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Phase 4: Main Tauri Application
+
+**`src-tauri/src/main.rs`:**
+```rust
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
+mod browser;
+mod websocket;
+
+use std::sync::Arc;
+use tauri::{Manager, State};
+use browser::BrowserManager;
+use websocket::WebSocketClient;
+
+struct AppState {
+    browser: Arc<BrowserManager>,
+}
+
+#[tauri::command]
+async fn start_browser_agent(
+    user_id: String,
+    ws_url: String,
+    state: State<'_, AppState>
+) -> Result<String, String> {
+    let client = WebSocketClient::new(user_id.clone(), state.browser.clone());
+    
+    tokio::spawn(async move {
+        if let Err(e) = client.connect(&ws_url).await {
+            eprintln!("WebSocket error: {}", e);
+        }
+    });
+
+    Ok(format!("Browser agent started for user: {}", user_id))
+}
+
+#[tauri::command]
+fn get_browser_status(state: State<AppState>) -> Result<String, String> {
+    Ok("Browser running".to_string())
+}
+
+fn main() {
+    tracing_subscriber::fmt::init();
+
+    let browser = Arc::new(
+        BrowserManager::new()
+            .expect("Failed to initialize browser")
+    );
+
+    tauri::Builder::default()
+        .manage(AppState {
+            browser: browser.clone(),
+        })
+        .invoke_handler(tauri::generate_handler![
+            start_browser_agent,
+            get_browser_status
+        ])
+        .setup(|app| {
+            // Auto-hide window on startup
+            let window = app.get_window("main").unwrap();
+            window.hide().unwrap();
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+## Phase 5: Web Application Integration
+
+### TypeScript Wrapper for Browser Control
+
+**Create: `lib/browser/browser-client.ts`:**
+```typescript
+import { getRedisClient } from "@/lib/redis/client";
+import { nanoid } from "nanoid";
+
+export interface BrowserNavigateParams {
+  url: string;
+}
+
+export interface BrowserNavigateResponse {
+  success: boolean;
+  url: string;
+  title: string;
+}
+
+export interface BrowserContentResponse {
+  success: boolean;
+  html: string;
+  text: string;
+  url: string;
+}
+
+export interface BrowserScreenshotResponse {
+  success: boolean;
+  screenshot: string; // base64
+}
+
+const BROWSER_COMMAND_TIMEOUT = 30000; // 30 seconds
+
+export async function sendBrowserCommand<T = any>(
+  userId: string,
+  command: {
+    type: 'navigate' | 'get_content' | 'screenshot' | 'execute_script' | 'close_tab';
+    [key: string]: any;
+  }
+): Promise<T> {
+  const redis = await getRedisClient();
+  const requestId = nanoid();
+
+  return new Promise(async (resolve, reject) => {
+    const timeout = setTimeout(() => {
+      redis.unsubscribe(`browser:response:${requestId}`);
+      reject(new Error('Browser command timeout'));
+    }, BROWSER_COMMAND_TIMEOUT);
+
+    // Subscribe to response channel
+    await redis.subscribe(`browser:response:${requestId}`);
+
+    redis.on('message', (channel, message) => {
+      if (channel === `browser:response:${requestId}`) {
+        clearTimeout(timeout);
+        redis.unsubscribe(`browser:response:${requestId}`);
+        
+        try {
+          const response = JSON.parse(message);
+          if (response.success) {
+            resolve(response.data || response);
+          } else {
+            reject(new Error(response.error || 'Browser command failed'));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      }
+    });
+
+    // Publish command
+    await redis.publish(
+      `browser:${userId}:commands`,
+      JSON.stringify({
+        ...command,
+        request_id: requestId
+      })
+    );
+  });
+}
+
+// Convenience functions
+export async function navigateBrowser(userId: string, url: string) {
+  return sendBrowserCommand<BrowserNavigateResponse>(userId, {
+    type: 'navigate',
+    url
+  });
+}
+
+export async function getBrowserContent(userId: string) {
+  return sendBrowserCommand<BrowserContentResponse>(userId, {
+    type: 'get_content'
+  });
+}
+
+export async function getBrowserScreenshot(userId: string) {
+  return sendBrowserCommand<BrowserScreenshotResponse>(userId, {
+    type: 'screenshot'
+  });
+}
+
+export async function executeBrowserScript(userId: string, script: string) {
+  return sendBrowserCommand(userId, {
+    type: 'execute_script',
+    script
+  });
+}
+
+export async function closeBrowserTab(userId: string) {
+  return sendBrowserCommand(userId, {
+    type: 'close_tab'
+  });
+}
+```
+
+### Add Browser Tools to LLM
+
+**Update: `lib/gemini-tools.ts`:**
+```typescript
+// Add to existing tools array
+{
+  name: "navigate_browser",
+  description: "Navigate to a URL in the headless browser and view the page content. Use this when the user asks to visit a website, view a page, or browse to a URL. After navigation, the page content will be automatically extracted.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      url: {
+        type: "string",
+        description: "The URL to navigate to (must include http:// or https://)"
+      }
+    },
+    required: ["url"]
+  }
+},
+{
+  name: "get_browser_content",
+  description: "Get the current content of the browser page including HTML and text. Use this to read or analyze the currently loaded page.",
+  parameters: {
+    type: "object" as const,
+    properties: {}
+  }
+},
+{
+  name: "screenshot_browser",
+  description: "Take a screenshot of the current browser page. Returns a base64-encoded PNG image. Use this when the user wants to see what a page looks like.",
+  parameters: {
+    type: "object" as const,
+    properties: {}
+  }
+},
+{
+  name: "execute_browser_script",
+  description: "Execute JavaScript code in the current browser page. Use this for advanced interactions like clicking buttons, filling forms, or extracting specific data.",
+  parameters: {
+    type: "object" as const,
+    properties: {
+      script: {
+        type: "string",
+        description: "JavaScript code to execute in the page context"
+      }
+    },
+    required: ["script"]
+  }
+}
+```
+
+### Update Chat API to Handle Browser Tools
+
+**Update: `app/api/chat/route.ts`:**
+
+Add browser tool handling in the tool execution section (around line 156-249):
+
+```typescript
+// Inside the function call handling block
+if (call.name === 'navigate_browser') {
+  const { url } = call.args as { url: string };
+  
+  encoder.enqueue(
+    `data: ${JSON.stringify({
+      type: 'tool_call',
+      tool: 'navigate_browser',
+      args: { url }
+    })}\n\n`
+  );
+
+  try {
+    const result = await navigateBrowser(userId, url);
+    
+    // Send navigation result
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'browser_navigate',
+        url: result.url,
+        title: result.title
+      })}\n\n`
+    );
+
+    // Auto-fetch content after navigation
+    const content = await getBrowserContent(userId);
+    
+    const toolResponse = {
+      name: call.name,
+      response: {
+        success: true,
+        url: result.url,
+        title: result.title,
+        text_content: content.text.substring(0, 10000) // Limit to 10k chars
+      }
+    };
+
+    functionResponses.push(toolResponse);
+    
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'tool_result',
+        tool: 'navigate_browser',
+        result: toolResponse.response
+      })}\n\n`
+    );
+  } catch (error: any) {
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'tool_error',
+        tool: 'navigate_browser',
+        error: error.message
+      })}\n\n`
+    );
+  }
+}
+
+if (call.name === 'screenshot_browser') {
+  encoder.enqueue(
+    `data: ${JSON.stringify({
+      type: 'tool_call',
+      tool: 'screenshot_browser',
+      args: {}
+    })}\n\n`
+  );
+
+  try {
+    const result = await getBrowserScreenshot(userId);
+    
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'browser_screenshot',
+        screenshot: result.screenshot
+      })}\n\n`
+    );
+
+    const toolResponse = {
+      name: call.name,
+      response: {
+        success: true,
+        message: "Screenshot captured successfully"
+      }
+    };
+
+    functionResponses.push(toolResponse);
+    
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'tool_result',
+        tool: 'screenshot_browser',
+        result: toolResponse.response
+      })}\n\n`
+    );
+  } catch (error: any) {
+    encoder.enqueue(
+      `data: ${JSON.stringify({
+        type: 'tool_error',
+        tool: 'screenshot_browser',
+        error: error.message
+      })}\n\n`
+    );
+  }
+}
+
+// Similar handling for get_browser_content and execute_browser_script
+```
+
+## Phase 6: Browser UI Component
+
+**Create: `components/browser/browser-view.tsx`:**
+```typescript
+"use client";
+
+import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { Loader2, ExternalLink } from "lucide-react";
+import Image from "next/image";
+
+interface BrowserViewProps {
+  url?: string;
+  screenshot?: string;
+  title?: string;
+  content?: string;
+  loading?: boolean;
+}
+
+export function BrowserView({
+  url,
+  screenshot,
+  title,
+  content,
+  loading = false
+}: BrowserViewProps) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">Loading page...</span>
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <p>No page loaded</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-background">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 p-3 border-b border-border">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{title || "Untitled"}</p>
+          <p className="text-xs text-muted-foreground truncate">{url}</p>
+        </div>
+        
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-2 hover:bg-accent rounded-md"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </a>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {screenshot ? (
+          <div className="relative w-full">
+            <Image
+              src={`data:image/png;base64,${screenshot}`}
+              alt="Browser screenshot"
+              width={1920}
+              height={1080}
+              className="w-full h-auto border border-border rounded-lg"
+            />
+          </div>
+        ) : content ? (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <pre className="whitespace-pre-wrap text-sm">{content}</pre>
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No content available</p>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### Update Enhanced Chat to Show Browser Content
+
+**Update: `components/chat/enhanced-chat-interface.tsx`:**
+
+Add browser state:
+```typescript
+const [browserState, setBrowserState] = useState<{
+  url?: string;
+  title?: string;
+  screenshot?: string;
+  content?: string;
+  loading?: boolean;
+}>({});
+```
+
+Handle browser events in SSE stream:
+```typescript
+// In handleSendMessage, inside the SSE reader loop
+if (event.type === 'browser_navigate') {
+  setBrowserState(prev => ({
+    ...prev,
+    url: event.url,
+    title: event.title,
+    loading: false
+  }));
+}
+
+if (event.type === 'browser_screenshot') {
+  setBrowserState(prev => ({
+    ...prev,
+    screenshot: event.screenshot
+  }));
+}
+
+if (event.type === 'tool_call' && event.tool === 'navigate_browser') {
+  setBrowserState(prev => ({
+    ...prev,
+    loading: true
+  }));
+}
+```
+
+### Update Split View to Include Browser
+
+**Update: `components/editor/split-view.tsx`:**
+
+```typescript
+import { BrowserView } from "@/components/browser/browser-view";
+
+interface SplitViewProps {
+  chatComponent: React.ReactNode;
+  browserState?: {
+    url?: string;
+    title?: string;
+    screenshot?: string;
+    content?: string;
+    loading?: boolean;
+  };
+  editorContext?: any;
+  onFileRead?: (path: string) => Promise<void>;
+  onFileSave?: (path: string, content: string) => Promise<void>;
+}
+
+export function SplitView({
+  chatComponent,
+  browserState,
+  editorContext,
+  onFileRead,
+  onFileSave
+}: SplitViewProps) {
+  const hasOpenFiles = editorContext?.openFiles.length > 0;
+  const hasBrowser = browserState?.url !== undefined;
+  
+  // Determine layout
+  let layout: 'chat-only' | 'chat-editor' | 'chat-browser' | 'chat-browser-editor';
+  
+  if (hasBrowser && hasOpenFiles) {
+    layout = 'chat-browser-editor';
+  } else if (hasBrowser) {
+    layout = 'chat-browser';
+  } else if (hasOpenFiles) {
+    layout = 'chat-editor';
+  } else {
+    layout = 'chat-only';
+  }
+
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Chat */}
+      <div className={cn(
+        "transition-all duration-300 ease-in-out overflow-hidden",
+        layout === 'chat-only' && "w-full",
+        layout === 'chat-editor' && "w-1/2",
+        layout === 'chat-browser' && "w-1/2",
+        layout === 'chat-browser-editor' && "w-1/3"
+      )}>
+        {chatComponent}
+      </div>
+
+      {/* Browser */}
+      {hasBrowser && (
+        <div className={cn(
+          "border-l border-border transition-all duration-300 ease-in-out overflow-hidden",
+          layout === 'chat-browser' && "w-1/2",
+          layout === 'chat-browser-editor' && "w-1/3"
+        )}>
+          <BrowserView {...browserState} />
+        </div>
+      )}
+
+      {/* Editor (existing code) */}
+      {hasOpenFiles && (
+        <div className={cn(
+          "border-l border-border transition-all duration-300 ease-in-out overflow-hidden",
+          layout === 'chat-editor' && "w-1/2",
+          layout === 'chat-browser-editor' && "w-1/3"
+        )}>
+          {/* Existing editor code */}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Phase 7: WebSocket Server Updates
+
+**Update: `websocket-server/src/connection-manager.ts`:**
+
+Add browser command routing:
+
+```typescript
+// In handleMessage function
+if (message.type === 'browser_command') {
+  const userId = this.connections.get(connectionId)?.userId;
+  if (!userId) return;
+
+  // Forward to browser agent if connected
+  const browserConnection = this.findBrowserAgent(userId);
+  if (browserConnection) {
+    ws.send(JSON.stringify(message));
+  } else {
+    // Return error
+    ws.send(JSON.stringify({
+      type: 'browser_error',
+      error: 'Browser agent not connected'
+    }));
+  }
+}
+
+// Helper method
+private findBrowserAgent(userId: string): string | null {
+  for (const [connId, conn] of this.connections) {
+    if (conn.userId === userId && conn.clientType === 'browser_agent') {
+      return connId;
+    }
+  }
+  return null;
+}
+```
+
+## Testing & Running
+
+### Development Workflow
+
+```bash
+# Terminal 1: Start Redis & PostgreSQL
+docker-compose up -d
+
+# Terminal 2: Start WebSocket server
+cd websocket-server && pnpm dev
+
+# Terminal 3: Start Next.js web app
+pnpm dev
+
+# Terminal 4: Start Tauri browser agent
+cd src-tauri && cargo tauri dev
+```
+
+### Test Flow
+
+1. Open web app (http://localhost:3000)
+2. Start Tauri app (will minimize to system tray)
+3. In Tauri app settings, enter user ID and connect to WS server
+4. In web app chat, type: "Navigate to https://example.com"
+5. LLM should call navigate_browser tool
+6. Browser opens in Tauri app
+7. Screenshot appears in split view
+8. Content sent to LLM
+9. LLM responds with summary
+
+## Key Features Delivered
+
+✅ Headless Chrome browser in Tauri desktop app
+✅ WebSocket connection to existing server
+✅ Browser control tools for LLM (navigate, screenshot, content extraction, script execution)
+✅ Split-view UI showing browser screenshots
+✅ Auto-minimize to system tray
+✅ Follows existing patterns (Redis pub/sub, tool execution, SSE streaming)
+✅ TypeScript type safety throughout
+✅ Error handling and timeouts
+✅ Integrates seamlessly with existing chat flow
+
+## Next Steps After Implementation
+
+1. Add browser tab management (multiple tabs)
+2. Implement browser history/back/forward
+3. Add form filling capabilities
+4. Implement cookie management
+5. Add proxy support for different regions
+6. Add browser settings (user agent, viewport size)
+7. Implement page interaction (click, type, scroll)
+8. Add network request interception
+9. Implement download handling
+10. Add browser extension support
+
+Let me know if you need clarification on any part!
+```

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AuthButtons } from "@/components/auth/auth-buttons";
 import { cn } from "@/lib/utils";
 
 export function Header() {
@@ -30,13 +29,12 @@ export function Header() {
   }, []);
 
   return (
-    <header 
+    <header
       className={cn(
         "fixed top-0 right-0 z-40 flex h-16 items-center justify-end px-6 bg-background/80 backdrop-blur-sm transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
         sidebarCollapsed ? "left-16" : "left-[280px]"
       )}
     >
-      <AuthButtons />
     </header>
   );
 }

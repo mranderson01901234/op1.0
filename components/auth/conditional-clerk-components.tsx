@@ -1,122 +1,113 @@
 "use client";
 
+import { SignedOut, SignedIn, UserButton, SignIn, SignUp, useUser } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 
 // Conditional wrapper components that only render Clerk components when ClerkProvider is available
 
 interface ConditionalSignedOutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
-export function ConditionalSignedOut({ children }: ConditionalSignedOutProps) {
-  const [ClerkSignedOut, setClerkSignedOut] = useState<any>(null);
+export function ConditionalSignedOut(props: ConditionalSignedOutProps = {}) {
+  const { children } = props || {};
   const [mounted, setMounted] = useState(false);
-
+  const { isLoaded } = useUser();
+  
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // Prevent hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true);
-    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    if (clerkKey) {
-      import("@clerk/nextjs")
-        .then((mod) => {
-          setClerkSignedOut(mod.SignedOut);
-        })
-        .catch(() => {
-          // Silently fail if Clerk can't be loaded
-        });
-    }
   }, []);
-
-  if (!mounted || !ClerkSignedOut) {
-    // If Clerk is not available, always show children (assume signed out)
+  
+  // If Clerk is not configured, always show children (assume signed out)
+  if (!clerkKey) {
     return <>{children}</>;
   }
 
-  return <ClerkSignedOut>{children}</ClerkSignedOut>;
+  // During SSR or before Clerk loads, return null to match client initial state
+  if (typeof window === 'undefined' || !mounted || !isLoaded) {
+    return null;
+  }
+
+  // Use Clerk's SignedOut component directly following official pattern
+  return <SignedOut>{children}</SignedOut>;
 }
 
 interface ConditionalSignedInProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
-export function ConditionalSignedIn({ children }: ConditionalSignedInProps) {
-  const [ClerkSignedIn, setClerkSignedIn] = useState<any>(null);
+export function ConditionalSignedIn(props: ConditionalSignedInProps = {}) {
+  const { children } = props || {};
   const [mounted, setMounted] = useState(false);
-
+  const { isLoaded } = useUser();
+  
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // Prevent hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true);
-    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    if (clerkKey) {
-      import("@clerk/nextjs")
-        .then((mod) => {
-          setClerkSignedIn(mod.SignedIn);
-        })
-        .catch(() => {
-          // Silently fail if Clerk can't be loaded
-        });
-    }
   }, []);
-
-  if (!mounted || !ClerkSignedIn) {
-    // If Clerk is not available, don't show signed in content
+  
+  // If Clerk is not configured, don't show signed in content
+  if (!clerkKey) {
     return null;
   }
 
-  return <ClerkSignedIn>{children}</ClerkSignedIn>;
+  // During SSR or before Clerk loads, return null to match client initial state
+  if (typeof window === 'undefined' || !mounted || !isLoaded) {
+    return null;
+  }
+
+  // Use Clerk's SignedIn component directly following official pattern
+  return <SignedIn>{children}</SignedIn>;
 }
 
 interface ConditionalUserButtonProps {
-  appearance?: any;
+  appearance?: Record<string, unknown>;
 }
 
 export function ConditionalUserButton({ appearance }: ConditionalUserButtonProps) {
-  const [ClerkUserButton, setClerkUserButton] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
-
+  const { isLoaded } = useUser();
+  
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // Prevent hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true);
-    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    if (clerkKey) {
-      import("@clerk/nextjs")
-        .then((mod) => {
-          setClerkUserButton(mod.UserButton);
-        })
-        .catch(() => {
-          // Silently fail if Clerk can't be loaded
-        });
-    }
   }, []);
-
-  if (!mounted || !ClerkUserButton) {
+  
+  // If Clerk is not configured, don't show user button
+  if (!clerkKey) {
     return null;
   }
 
-  return <ClerkUserButton appearance={appearance} />;
+  // During SSR or before Clerk loads, return null to match client initial state
+  if (typeof window === 'undefined' || !mounted || !isLoaded) {
+    return null;
+  }
+
+  // Use Clerk's UserButton component directly following official pattern
+  return <UserButton appearance={appearance} />;
 }
 
 interface ConditionalSignInProps {
-  routing?: string;
-  appearance?: any;
+  routing?: "virtual" | "hash";
+  appearance?: Record<string, unknown>;
 }
 
 export function ConditionalSignIn({ routing, appearance }: ConditionalSignInProps) {
-  const [ClerkSignIn, setClerkSignIn] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    if (clerkKey) {
-      import("@clerk/nextjs")
-        .then((mod) => {
-          setClerkSignIn(mod.SignIn);
-        })
-        .catch(() => {
-          // Silently fail if Clerk can't be loaded
-        });
-    }
-  }, []);
-
-  if (!mounted || !ClerkSignIn) {
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // If Clerk is not configured, show message
+  if (!clerkKey) {
     return (
       <div className="p-6 text-center text-text-secondary">
         Clerk authentication is not configured. Please set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.
@@ -124,33 +115,21 @@ export function ConditionalSignIn({ routing, appearance }: ConditionalSignInProp
     );
   }
 
-  return <ClerkSignIn routing={routing} appearance={appearance} />;
+  // Use Clerk's SignIn component directly following official pattern
+  return <SignIn routing={routing} appearance={appearance} />;
 }
 
 interface ConditionalSignUpProps {
-  routing?: string;
-  appearance?: any;
+  routing?: "virtual" | "hash";
+  appearance?: Record<string, unknown>;
 }
 
 export function ConditionalSignUp({ routing, appearance }: ConditionalSignUpProps) {
-  const [ClerkSignUp, setClerkSignUp] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-    if (clerkKey) {
-      import("@clerk/nextjs")
-        .then((mod) => {
-          setClerkSignUp(mod.SignUp);
-        })
-        .catch(() => {
-          // Silently fail if Clerk can't be loaded
-        });
-    }
-  }, []);
-
-  if (!mounted || !ClerkSignUp) {
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // If Clerk is not configured, show message
+  if (!clerkKey) {
     return (
       <div className="p-6 text-center text-text-secondary">
         Clerk authentication is not configured. Please set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.
@@ -158,6 +137,7 @@ export function ConditionalSignUp({ routing, appearance }: ConditionalSignUpProp
     );
   }
 
-  return <ClerkSignUp routing={routing} appearance={appearance} />;
+  // Use Clerk's SignUp component directly following official pattern
+  return <SignUp routing={routing} appearance={appearance} />;
 }
 

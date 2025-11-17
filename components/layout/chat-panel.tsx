@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { getConversations, deleteConversation } from "@/lib/storage";
 import { formatMessageTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
 import type { Conversation } from "@/lib/types";
 
 interface ChatPanelProps {
@@ -16,11 +17,15 @@ export function ChatPanel({ collapsed }: ChatPanelProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string>("");
+  
+  // Get current user ID from Clerk (will be null if not signed in or Clerk not configured)
+  const { user } = useUser();
+  const userId = user?.id || null;
 
   // Load conversations from storage
   useEffect(() => {
     const loadConversations = () => {
-      const loadedConversations = getConversations();
+      const loadedConversations = getConversations(userId);
       setConversations(loadedConversations);
       
       // Set active conversation to the first one if available
@@ -48,7 +53,7 @@ export function ChatPanel({ collapsed }: ChatPanelProps) {
       window.removeEventListener('conversation-deleted', handleStorageChange);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [activeId]);
+  }, [activeId, userId]);
 
   // Listen for current conversation ID changes from chat interface
   useEffect(() => {
@@ -66,7 +71,7 @@ export function ChatPanel({ collapsed }: ChatPanelProps) {
     e.stopPropagation(); // Prevent triggering conversation selection
     
     try {
-      deleteConversation(conversationId);
+      deleteConversation(conversationId, userId);
       
       // Update local state and get remaining conversations
       setConversations(prev => {

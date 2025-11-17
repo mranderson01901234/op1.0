@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Settings, MessageSquare, FolderOpen, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquare, FolderOpen, Plus } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ChatPanel } from "./chat-panel";
 import { FilesPanel } from "./files-panel";
+import { AgentStatus } from "@/components/agent-status";
+import { AuthButtons } from "@/components/auth/auth-buttons";
 
 interface SidebarProps {
   className?: string;
@@ -14,7 +17,17 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "files">("chat");
-  const [connected, setConnected] = useState(true);
+  
+  // Get authentication state
+  const { isSignedIn, isLoaded } = useUser();
+  
+  // Check if Clerk is configured
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isClerkConfigured = !!clerkKey;
+  
+  // If Clerk is not configured, allow access (for development/testing)
+  // Otherwise, require authentication
+  const isAuthenticated = !isClerkConfigured || (isLoaded && isSignedIn);
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebar-collapsed");
@@ -42,15 +55,21 @@ export function Sidebar({ className }: SidebarProps) {
         style={{ borderRight: "1px solid rgba(255, 255, 255, 0.08)" }}
       >
         {/* Header */}
-        <div className="flex h-16 items-center justify-center px-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
+        <div className="flex h-16 items-center gap-3 px-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
           {!collapsed ? (
-            <h1 className="text-base font-semibold tracking-tighter">
-              OperaStudio
-            </h1>
+            <>
+              <AuthButtons />
+              <h1 className="text-base font-semibold tracking-tighter">
+                OperaStudio
+              </h1>
+            </>
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white font-bold text-background">
-              OS
-            </div>
+            <>
+              <AuthButtons />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white font-bold text-background">
+                OS
+              </div>
+            </>
           )}
         </div>
 
@@ -94,91 +113,56 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
         )}
 
-        {/* New Chat Button - Always visible */}
-        <div className="mx-2 mt-2 px-2">
-          <button
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('new-chat'));
-            }}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-              "bg-elevated text-white hover:bg-elevated-hover",
-              collapsed && "justify-center"
-            )}
-            aria-label="Start new chat"
-          >
-            <Plus className="h-4 w-4 flex-shrink-0" />
-            {!collapsed && <span>New Chat</span>}
-          </button>
-        </div>
+        {/* New Chat Button - Only visible when authenticated */}
+        {isAuthenticated && (
+          <div className="mx-2 mt-2 px-2">
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('new-chat'));
+              }}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                "bg-elevated text-white hover:bg-elevated-hover",
+                collapsed && "justify-center"
+              )}
+              aria-label="Start new chat"
+            >
+              <Plus className="h-4 w-4 flex-shrink-0" />
+              {!collapsed && <span>New Chat</span>}
+            </button>
+          </div>
+        )}
 
         {/* Panel Content - Takes up remaining space */}
-        <div className="flex-1 overflow-hidden">
-          <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden={activeTab !== "chat"} className="h-full">
-            {activeTab === "chat" && <ChatPanel collapsed={collapsed} />}
-          </div>
-          <div id="files-panel" role="tabpanel" aria-labelledby="files-tab" hidden={activeTab !== "files"} className="h-full">
-            {activeTab === "files" && <FilesPanel collapsed={collapsed} />}
-          </div>
-        </div>
-
-        {/* Footer - Sticky at bottom */}
-        <div className="mt-auto p-2" style={{ borderTop: "1px solid rgba(255, 255, 255, 0.06)" }}>
-          {!collapsed ? (
-            <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 transition-all duration-150 hover:bg-gradient-hover">
-              {/* Local Environment Status - Horizontal */}
-              <div className="flex flex-1 items-center gap-2">
-                <div className="relative">
-                  <div
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      connected ? "bg-green-500" : "bg-gray-700"
-                    )}
-                  />
-                  {connected && (
-                    <div className="absolute inset-0 h-2 w-2 rounded-full bg-green-500 animate-ping opacity-75" />
-                  )}
+        <div className="flex-1 overflow-hidden min-h-0">
+          {isAuthenticated ? (
+            <>
+              {activeTab === "chat" && (
+                <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" className="h-full flex flex-col min-h-0">
+                  <ChatPanel collapsed={collapsed} />
                 </div>
-                <span className="text-xs text-gray-500">
-                  {connected ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-
-              {/* Settings Icon */}
-              <button
-                aria-label="Open settings"
-                className="flex h-8 w-8 items-center justify-center rounded-lg opacity-60 transition-all duration-150 hover:bg-gray-900 hover:opacity-100"
-              >
-                <Settings className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
+              )}
+              {activeTab === "files" && (
+                <div id="files-panel" role="tabpanel" aria-labelledby="files-tab" className="h-full flex flex-col min-h-0">
+                  <FilesPanel collapsed={collapsed} />
+                </div>
+              )}
+            </>
           ) : (
-            <div className="flex flex-col items-center gap-2">
-              {/* Connection status dot */}
-              <div className="flex h-8 w-8 items-center justify-center">
-                <div className="relative">
-                  <div
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      connected ? "bg-green-500" : "bg-gray-700"
-                    )}
-                  />
-                  {connected && (
-                    <div className="absolute inset-0 h-2 w-2 rounded-full bg-green-500 animate-ping opacity-75" />
-                  )}
-                </div>
-              </div>
-
-              {/* Settings icon */}
-              <button
-                aria-label="Open settings"
-                className="flex h-8 w-8 items-center justify-center rounded-lg opacity-60 transition-all duration-150 hover:bg-gray-900 hover:opacity-100"
-              >
-                <Settings className="h-4 w-4" aria-hidden="true" />
-              </button>
+            <div className="flex h-full items-center justify-center px-4">
+              <p className="text-center text-sm text-text-muted">
+                Sign in to access chat and files
+              </p>
             </div>
           )}
         </div>
+
+        {/* Footer - Sticky at bottom - Only show connection status when authenticated */}
+        {isAuthenticated && (
+          <div className="mt-auto p-2" style={{ borderTop: "1px solid rgba(255, 255, 255, 0.06)" }}>
+            <AgentStatus collapsed={collapsed} />
+          </div>
+        )}
 
         {/* Collapse Button */}
         <button

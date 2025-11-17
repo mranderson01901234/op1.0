@@ -33,7 +33,7 @@ export function Message({ role, content, className }: MessageProps) {
       >
         <div
           className={cn(
-            "whitespace-pre-wrap break-words text-[15px] leading-[1.6]",
+            "whitespace-pre-wrap break-words text-[16px] leading-[1.6]",
             isUser ? "text-white" : "text-gray-400"
           )}
         >

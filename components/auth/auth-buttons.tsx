@@ -20,24 +20,10 @@ export function AuthButtons() {
   };
 
   return (
-    <>
+    <div>
+      {/* Hide auth buttons for unauthenticated users - main content has sign-in prompt */}
       <ConditionalSignedOut>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={openSignIn}
-            className="flex items-center gap-2 rounded-lg bg-elevated px-4 py-2 text-sm font-medium text-white transition-all duration-150 hover:bg-elevated-hover"
-          >
-            <LogIn className="h-4 w-4" />
-            Sign In
-          </button>
-          <button
-            onClick={openSignUp}
-            className="flex items-center gap-2 rounded-lg bg-surface border border-[rgba(255,255,255,0.08)] px-4 py-2 text-sm font-medium text-white transition-all duration-150 hover:bg-elevated-hover"
-          >
-            <UserPlus className="h-4 w-4" />
-            Sign Up
-          </button>
-        </div>
+        {/* Empty - no buttons shown in header for unauthenticated users */}
       </ConditionalSignedOut>
       
       <ConditionalSignedIn>
@@ -79,7 +65,7 @@ export function AuthButtons() {
         mode={authMode}
         onModeChange={(newMode) => setAuthMode(newMode)}
       />
-    </>
+    </div>
   );
 }
 

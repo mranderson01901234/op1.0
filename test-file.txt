@@ -1,0 +1,3 @@
+Hello from OperaStudio!
+This is a test file created to verify that the local agent can read files.
+Tool execution is now integrated into the chat interface.

@@ -1,0 +1,496 @@
+# Claude Code Prompt: Opera Studio Browser Feature
+
+## Project Overview
+
+Build a browser feature for Opera Studio that allows users to open a web browser within the application. The browser appears in a sliding panel when triggered by either:
+1. Clicking a globe icon in the chat input
+2. Clicking search result links in chat messages
+
+## Technical Stack
+
+- **Framework:** Next.js 14+ (App Router) with TypeScript
+- **Browser Engine:** CheerpX (WebAssembly-based x86 virtualization)
+- **UI Library:** React 18+
+- **Styling:** Tailwind CSS
+- **Icons:** Lucide React
+- **Animations:** CSS transitions (300ms cubic-bezier)
+
+## Current Project Structure
+
+```
+op1.0/
+├── app/
+│   ├── layout.tsx          # Root layout
+│   ├── page.tsx            # Main page (needs modification)
+│   └── api/
+│       └── chat/
+│           └── route.ts    # Chat API (needs modification)
+├── components/
+│   ├── chat/
+│   │   ├── enhanced-chat-interface.tsx  # Main chat (needs modification)
+│   │   ├── chat-input.tsx              # Input component (needs modification)
+│   │   └── message-renderer.tsx         # Message display (needs modification)
+│   └── ui/                 # Existing UI components
+├── lib/
+│   └── types.ts            # Type definitions (needs additions)
+├── public/
+│   └── (will add browser-disk.ext2 here)
+└── package.json            # Needs new dependencies
+```
+
+## Implementation Tasks
+
+### Task 1: Install Dependencies
+
+Add these dependencies to package.json and install:
+
+```json
+{
+  "dependencies": {
+    "@leaningtech/cheerpx": "^1.0.0"
+  }
+}
+```
+
+Run: `npm install @leaningtech/cheerpx`
+
+Note: Also download the Chromium filesystem image (~40MB) and place in /public:
+- URL: https://cdn.leaningtech.com/cheerpx/chromium-disk.ext2
+- Location: /public/chromium-disk.ext2
+
+### Task 2: Add Type Definitions
+
+File: `lib/types.ts`
+
+Add these new types:
+
+```typescript
+// Browser state management
+export interface BrowserState {
+  isOpen: boolean;
+  url: string;
+  loading: boolean;
+}
+
+// Search result with clickable link
+export interface SearchResult {
+  type: 'search_result';
+  summary: string;
+  query: string;
+  url: string;
+}
+
+// Extended Message type to support search results
+export interface Message {
+  // ... existing Message fields
+  searchResult?: SearchResult;
+}
+```
+
+### Task 3: Create Browser View Component
+
+File: `components/browser/browser-view.tsx` (NEW FILE)
+
+Create a new component that:
+1. Accepts `url` and `onClose` props
+2. Uses CheerpX to load Chromium browser
+3. Displays loading state while initializing
+4. Renders browser in a canvas element
+5. Shows close button in header
+
+Key features:
+- useEffect to initialize CheerpX when component mounts
+- Canvas element for browser display
+- Loading spinner during initialization
+- Close button in header
+- Proper cleanup on unmount
+
+Implementation notes:
+- Import CheerpX dynamically: `await import('@leaningtech/cheerpx')`
+- Create CheerpX instance with: `CheerpX.create({ mounts: [...], networkInterface: true })`
+- Set canvas display: `cx.setDisplay(canvasRef.current)`
+- Start Chromium: `cx.run("/usr/bin/chromium-browser", ["--no-sandbox", "--disable-gpu", "--window-size=1280,720", url])`
+
+### Task 4: Update Main Layout
+
+File: `app/page.tsx`
+
+Modify to:
+1. Add browser state management (useState for isOpen and url)
+2. Create handler functions for opening/closing browser
+3. Pass handlers to ChatInterface component
+4. Add browser panel that slides in from right
+5. Implement responsive layout with transitions
+
+Layout structure:
+- Flex container with h-screen
+- Chat div with conditional width (full or 50%)
+- Browser div with conditional width (0% or 50%)
+- Smooth transitions on width changes (300ms)
+
+State management:
+```typescript
+const [browserOpen, setBrowserOpen] = useState(false);
+const [browserUrl, setBrowserUrl] = useState('https://google.com');
+
+const handleOpenBrowser = (url?: string) => {
+  if (url) setBrowserUrl(url);
+  setBrowserOpen(true);
+};
+
+const handleCloseBrowser = () => {
+  setBrowserOpen(false);
+};
+```
+
+### Task 5: Update Chat Input Component
+
+File: `components/chat/chat-input.tsx`
+
+Add:
+1. Globe icon button (only show when browser is closed)
+2. Click handler that calls onOpenBrowser prop
+3. Proper styling and hover states
+
+Requirements:
+- Globe icon from lucide-react
+- Button positioned to left of Send button
+- Conditional rendering: only show when !browserOpen
+- Tooltip: "Open browser"
+- Styling: text-gray-600 hover:text-blue-500 hover:bg-blue-50
+
+Props to add:
+```typescript
+interface ChatInputProps {
+  // ... existing props
+  onOpenBrowser: () => void;
+  browserOpen: boolean;
+}
+```
+
+### Task 6: Add Search Link Component
+
+File: `components/chat/search-link.tsx` (NEW FILE)
+
+Create a clickable search result component:
+1. Display search icon and query text
+2. Handle click to open browser with specific URL
+3. Show hover state with external link icon
+4. Styled as a button with blue theme
+
+Props:
+```typescript
+interface SearchLinkProps {
+  query: string;
+  url: string;
+  onOpenBrowser: (url: string) => void;
+}
+```
+
+Styling:
+- Flex container with gap
+- Blue background (bg-blue-50 hover:bg-blue-100)
+- Rounded corners (rounded-lg)
+- Icon: Search from lucide-react
+- External link icon appears on hover
+
+### Task 7: Update Message Renderer
+
+File: `components/chat/message-renderer.tsx`
+
+Modify to:
+1. Check if message has searchResult
+2. If yes, render SearchLink component
+3. Pass onOpenBrowser handler from props
+
+Add to props:
+```typescript
+interface MessageRendererProps {
+  // ... existing props
+  onOpenBrowser: (url: string) => void;
+}
+```
+
+Conditional rendering:
+```typescript
+if (message.searchResult) {
+  return (
+    <div>
+      <Markdown>{message.content}</Markdown>
+      <SearchLink
+        query={message.searchResult.query}
+        url={message.searchResult.url}
+        onOpenBrowser={onOpenBrowser}
+      />
+    </div>
+  );
+}
+```
+
+### Task 8: Update Chat Interface
+
+File: `components/chat/enhanced-chat-interface.tsx`
+
+Add:
+1. onOpenBrowser and browserOpen props
+2. Pass these props down to ChatInput and MessageRenderer
+3. Ensure proper prop drilling
+
+Props to add:
+```typescript
+interface ChatInterfaceProps {
+  // ... existing props
+  onOpenBrowser: (url?: string) => void;
+  browserOpen: boolean;
+}
+```
+
+### Task 9: Update Chat API (Optional for Demo)
+
+File: `app/api/chat/route.ts`
+
+When Gemini performs a web search, format the response to include searchResult:
+
+```typescript
+// After getting search results
+const searchResult: SearchResult = {
+  type: 'search_result',
+  summary: 'Based on the search results...',
+  query: searchQuery,
+  url: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`
+};
+
+// Include in response
+return Response.json({
+  content: responseText,
+  searchResult: searchResult
+});
+```
+
+### Task 10: Add Next.js Configuration
+
+File: `next.config.js`
+
+Add WASM support:
+
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+    return config;
+  },
+};
+
+module.exports = nextConfig;
+```
+
+### Task 11: Add PWA Caching (Optional but Recommended)
+
+Create service worker to cache CheerpX files:
+
+File: `public/sw.js` (NEW FILE)
+
+```javascript
+const CACHE_NAME = 'opera-studio-browser-v1';
+const urlsToCache = [
+  '/chromium-disk.ext2'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+  );
+});
+```
+
+## UI/UX Requirements
+
+### Animations
+- Slide transition: 300ms cubic-bezier(0.4, 0, 0.2, 1)
+- Chat width: transitions from 100% to 50%
+- Browser width: transitions from 0% to 50%
+- Smooth, no janky animations
+
+### Loading States
+- Browser loading: Show spinner with "Loading browser..." text
+- First load: Show "First time: ~3 seconds" subtitle
+- Subsequent loads: Just "Loading browser..."
+
+### Visual Design
+- Globe icon: w-5 h-5, blue-500 color
+- Close button: X icon, top-right of browser header
+- Browser header: bg-gray-50, border-b
+- Loading spinner: blue-500, w-8 h-8
+
+### Responsive Behavior
+- Desktop: Full functionality
+- Tablet: Full functionality (might be tight)
+- Mobile: Show warning "Browser works best on desktop"
+
+## Testing Checklist
+
+After implementation, verify:
+
+1. **Globe Icon Click:**
+   - [ ] Globe icon visible in chat input by default
+   - [ ] Clicking globe opens browser
+   - [ ] Chat slides to 50% width smoothly
+   - [ ] Browser loads Google homepage
+   - [ ] Globe icon disappears when browser is open
+
+2. **Search Link Click:**
+   - [ ] Search links render correctly in messages
+   - [ ] Clicking link opens browser with that URL
+   - [ ] Same smooth animation as globe click
+
+3. **Browser Functionality:**
+   - [ ] Browser displays in canvas element
+   - [ ] User can click and navigate
+   - [ ] User can type in search boxes
+   - [ ] Pages load correctly
+   - [ ] Scrolling works
+
+4. **Close Button:**
+   - [ ] X button visible in browser header
+   - [ ] Clicking X closes browser
+   - [ ] Chat expands back to 100% smoothly
+   - [ ] Globe icon reappears
+
+5. **Loading States:**
+   - [ ] Loading spinner shows during initialization
+   - [ ] "Loading browser..." text visible
+   - [ ] Spinner disappears when browser ready
+
+6. **Cross-Browser:**
+   - [ ] Works in Chrome/Edge
+   - [ ] Works in Firefox
+   - [ ] Works in Safari (Mac)
+
+7. **Performance:**
+   - [ ] First load completes in 2-4 seconds
+   - [ ] Subsequent loads ~1 second
+   - [ ] No memory leaks (check DevTools)
+   - [ ] Browser responsive (30+ FPS)
+
+## Common Issues and Solutions
+
+### Issue: CheerpX not loading
+**Solution:** Check that chromium-disk.ext2 is in /public directory and accessible
+
+### Issue: Canvas not displaying
+**Solution:** Ensure canvas ref is set before calling cx.setDisplay()
+
+### Issue: Browser starts but shows blank screen
+**Solution:** Check browser console for CheerpX errors, may need different Chromium args
+
+### Issue: Mouse clicks not registering
+**Solution:** CheerpX handles this automatically, check canvas element has pointer-events: auto
+
+### Issue: Slow loading
+**Solution:** Implement PWA caching, optimize Chromium args, reduce window size
+
+### Issue: Memory usage high
+**Solution:** Expected (~200MB), but ensure browser is cleaned up on unmount
+
+## Development Order
+
+Build in this sequence:
+
+1. Install dependencies (Task 1)
+2. Download Chromium image (Task 1)
+3. Add type definitions (Task 2)
+4. Create BrowserView component (Task 3)
+5. Update main layout (Task 4)
+6. Test: Click globe icon → browser should appear (basic test)
+7. Update ChatInput (Task 5)
+8. Create SearchLink component (Task 6)
+9. Update MessageRenderer (Task 7)
+10. Update ChatInterface (Task 8)
+11. Test: Full flow with search links
+12. Add Next.js config (Task 10)
+13. Add PWA caching (Task 11)
+14. Final testing (all checklist items)
+
+## Expected File Changes
+
+**New Files:**
+- `components/browser/browser-view.tsx` (~150 lines)
+- `components/chat/search-link.tsx` (~50 lines)
+- `public/chromium-disk.ext2` (download, ~40MB)
+- `public/sw.js` (optional, ~30 lines)
+
+**Modified Files:**
+- `app/page.tsx` (add ~40 lines)
+- `components/chat/enhanced-chat-interface.tsx` (add ~10 lines)
+- `components/chat/chat-input.tsx` (add ~20 lines)
+- `components/chat/message-renderer.tsx` (add ~15 lines)
+- `lib/types.ts` (add ~15 lines)
+- `next.config.js` (add ~8 lines)
+- `package.json` (add 1 dependency)
+
+**Total Code Added:** ~300-350 lines
+
+## Success Criteria
+
+The feature is complete when:
+
+1. ✅ User can click globe icon and browser appears
+2. ✅ User can click search links and browser opens to that URL
+3. ✅ User can browse the web (click, type, navigate)
+4. ✅ User can close browser and chat expands
+5. ✅ Animations are smooth (no jank)
+6. ✅ Works on Windows, Mac, and Linux
+7. ✅ First load < 4 seconds, subsequent < 2 seconds
+8. ✅ No console errors
+9. ✅ No memory leaks
+
+## Deployment Notes
+
+Before deploying to production:
+
+1. **Download Chromium image:** Ensure /public/chromium-disk.ext2 is committed (or served from CDN)
+2. **Check Next.js build:** Run `npm run build` and verify no WASM errors
+3. **Test on staging:** Verify browser works on staging environment
+4. **Check CORS:** Ensure WASM files are served with correct headers
+5. **Monitor performance:** Check initial load time with users
+
+## Future Enhancements (Not in Scope)
+
+These can be added later:
+- Remember last browsed URL
+- Browser history/bookmarks
+- Multiple browser tabs
+- Download handling
+- LLM integration for browser control
+- Mobile touch support optimization
+
+## Questions to Clarify
+
+Before starting, confirm:
+
+1. Should globe icon be in the input box or in the header?
+2. Should search links be styled as buttons or inline links?
+3. Should browser remember last URL when reopened?
+4. Should there be a loading progress bar or just spinner?
+5. Should there be keyboard shortcuts (e.g., Cmd+B to toggle browser)?
+
+## Resources
+
+- CheerpX Docs: https://docs.leaningtech.com/cheerpx
+- WebVM Example: https://github.com/leaningtech/webvm
+- Next.js WASM: https://nextjs.org/docs/app/building-your-application/optimizing/lazy-loading#with-external-libraries-and-react
+
+---
+
+## Final Notes
+
+This is a relatively straightforward implementation (~350 lines of new code) that adds significant value to Opera Studio. The hardest part is waiting for CheerpX to load on first use (2-4 seconds), but after that it's cached and subsequent loads are fast.
+
+Focus on the UX details - smooth animations, clear loading states, and intuitive triggers (globe icon + clickable links). The browser itself "just works" thanks to CheerpX.
+
+Good luck! 🚀

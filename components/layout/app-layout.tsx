@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
-import { Header } from "./header";
 import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
@@ -23,8 +22,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     handleStorage();
     window.addEventListener("storage", handleStorage);
 
-    // Poll for changes (for same-tab updates)
-    const interval = setInterval(handleStorage, 100);
+    // Poll for changes (for same-tab updates) - reduced frequency for better performance
+    const interval = setInterval(handleStorage, 1000);
 
     return () => {
       window.removeEventListener("storage", handleStorage);
@@ -35,11 +34,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <Sidebar />
-      <Header />
       <main
         className={cn(
           "flex flex-1 h-screen flex-col transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-          sidebarCollapsed ? "ml-16 pt-16" : "ml-[280px] pt-16"
+          sidebarCollapsed ? "ml-16" : "ml-[280px]"
         )}
       >
         {children}

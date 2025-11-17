@@ -1,0 +1,68 @@
+{
+  "name": "operastudio-browser-agent",
+  "version": "1.0.0",
+  "description": "OperaStudio Headless Browser Agent",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox --disable-gpu",
+    "dev": "electron . --dev --no-sandbox --disable-gpu",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "browser",
+    "automation",
+    "headless"
+  ],
+  "author": "OperaStudio",
+  "license": "MIT",
+  "dependencies": {
+    "nanoid": "^3.3.7",
+    "puppeteer": "^24.30.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.operastudio.browser",
+    "productName": "OperaStudio Browser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
+      "runAfterFinish": true
+    }
+  }
+}

@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, KeyboardEvent, useRef, useEffect } from "react";
-import { Send, Paperclip, Image } from "lucide-react";
+import { Send, Paperclip, Image, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, searchMode?: boolean) => void;
   className?: string;
 }
 
 export function ChatInput({ onSend, className }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isFocused, setIsFocused] = useState(false);
+  const [searchMode, setSearchMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
@@ -19,7 +20,7 @@ export function ChatInput({ onSend, className }: ChatInputProps) {
       const sendStartTime = performance.now();
       console.log(`[PERF] ===== USER ACTION =====`);
       console.log(`[PERF] ChatInput.handleSend called at ${sendStartTime.toFixed(2)}ms`);
-      onSend(message.trim());
+      onSend(message.trim(), searchMode);
       setMessage("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "48px";
@@ -44,7 +45,7 @@ export function ChatInput({ onSend, className }: ChatInputProps) {
 
   return (
     <div className={cn("relative flex w-full justify-center bg-background px-0 pb-6 pt-4", className)}>
-      <div className="w-full max-w-[780px] px-8">
+      <div className="w-full max-w-[960px] px-8">
         {/* Slim Rugged Input Container */}
         <div
           className={cn(
@@ -60,6 +61,19 @@ export function ChatInput({ onSend, className }: ChatInputProps) {
         >
           {/* Left Actions */}
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSearchMode(!searchMode)}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-md transition-all duration-150",
+                searchMode
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "hover:bg-elevated text-text-secondary"
+              )}
+              aria-label="Toggle search mode"
+              title={searchMode ? "Search mode ON" : "Search mode OFF"}
+            >
+              <Search className="h-4 w-4" />
+            </button>
             <button
               className="flex h-8 w-8 items-center justify-center rounded-md transition-all duration-150 hover:bg-elevated"
               aria-label="Attach file"

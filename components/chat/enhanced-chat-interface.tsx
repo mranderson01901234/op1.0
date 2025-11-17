@@ -20,11 +20,12 @@
  * DO NOT refactor these sections without understanding the full flow.
  */
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { RotateCcw, Copy, Check, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
+import { useUser } from "@clerk/nextjs";
 import { ChatInput } from "./chat-input";
 import { MessageRenderer } from "./message-renderer";
 import { WelcomeScreen } from "./welcome-screen";
@@ -34,8 +35,14 @@ import { saveConversation, getConversations, getConversation } from "@/lib/stora
 import { generateConversationTitle } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Message, Conversation } from "@/lib/types";
+import { useEditor } from "@/contexts/editor-context";
+import SearchResponse from "./SearchResponse";
+import type { BraveSearchResult } from "@/lib/search/braveSearch";
+import { throttle } from "@/lib/utils/throttle";
 
 export function EnhancedChatInterface() {
+  // Access editor context
+  const { openFiles, activeFile, activeTab, openUrl } = useEditor();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -47,6 +54,16 @@ export function EnhancedChatInterface() {
   const [spacerHeight, setSpacerHeight] = useState(0);
   const [positioningMessageId, setPositioningMessageId] = useState<string | null>(null); // Track message being positioned
   const [positioningResponseId, setPositioningResponseId] = useState<string | null>(null); // Track response being positioned after completion
+  const [currentToolCall, setCurrentToolCall] = useState<{ tool: string; params: any } | null>(null); // Track active tool execution
+  const [currentSearchResults, setCurrentSearchResults] = useState<BraveSearchResult[]>([]); // Track search results for current response
+  const [highlightedCitation, setHighlightedCitation] = useState<number | null>(null); // Track highlighted citation
+
+  // Get current user ID from Clerk (will be null if not signed in or Clerk not configured)
+  const { user } = useUser();
+  const userId = user?.id || null;
+
+  // Use a ref to store search results to avoid closure issues in the stream handler
+  const searchResultsRef = useRef<BraveSearchResult[]>([]);
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,6 +82,42 @@ export function EnhancedChatInterface() {
   const shortResponseDetectedRef = useRef<boolean>(false); // Track if we've detected response will be short
   const responseLengthCheckCountRef = useRef<number>(0); // Track how many times we've checked response length
   const streamingStartTimeRef = useRef<number>(0); // Track when streaming started
+
+  // Helper function to format tool call messages in natural language
+  // Memoized to avoid recreating on every render
+  const formatToolCallMessage = useCallback((tool: string, params: any): string => {
+    const toolMessages: Record<string, (params: any) => string> = {
+      read_file: (p) => `Reading file: ${p.path}`,
+      write_file: (p) => `Writing to file: ${p.path}`,
+      list_directory: (p) => `Listing directory: ${p.path}`,
+      execute_command: (p) => `Executing command: ${p.command}`,
+      get_system_info: () => `Getting system information`,
+      get_system_health: () => `Checking system health`,
+      get_cpu_usage: () => `Analyzing CPU usage`,
+      get_memory_usage: () => `Checking memory usage`,
+      get_disk_space: (p) => p.path ? `Checking disk space for ${p.path}` : `Checking disk space`,
+      get_network_info: () => `Gathering network information`,
+      get_process_list: (p) => p.filter ? `Listing processes matching "${p.filter}"` : `Listing running processes`,
+      search_files: (p) => `Searching for files matching "${p.pattern}" in ${p.path}`,
+      search_content: (p) => `Searching for "${p.query}" in ${p.path}`,
+      get_current_directory: () => `Getting current directory`,
+      git_status: (p) => `Checking git status in ${p.path}`,
+      git_diff: (p) => `Getting git diff from ${p.path}`,
+      run_npm_command: (p) => `Running npm ${p.command}`,
+      install_package: (p) => `Installing ${p.package_name}`,
+      create_directory: (p) => `Creating directory: ${p.path}`,
+      delete_file: (p) => `Deleting file: ${p.path}`,
+      delete_directory: (p) => `Deleting directory: ${p.path}`,
+      move_file: (p) => `Moving ${p.source} to ${p.destination}`,
+      copy_file: (p) => `Copying ${p.source} to ${p.destination}`,
+      get_file_info: (p) => `Getting info for: ${p.path}`,
+      get_directory_size: (p) => `Calculating size of ${p.path}`,
+      get_environment_variables: (p) => p.names ? `Getting environment variables: ${p.names}` : `Getting environment variables`,
+    };
+
+    const formatter = toolMessages[tool];
+    return formatter ? formatter(params || {}) : `Using tool: ${tool}`;
+  }, []);
 
   // Scroll to bottom - shows latest messages
   const scrollToBottom = useCallback(() => {
@@ -208,24 +261,24 @@ export function EnhancedChatInterface() {
     setShowScrollButton(distanceFromBottom > 200);
   }, []);
 
-  // Monitor scroll position
+  // Throttled scroll handler to improve performance
+  const throttledCheckScrollPosition = useMemo(
+    () => throttle(checkScrollPosition, 100),
+    [checkScrollPosition]
+  );
+
+  // Monitor scroll position with throttling
   useEffect(() => {
     const container = messagesRef.current;
     if (!container) return;
 
-    container.addEventListener("scroll", checkScrollPosition);
-    return () => container.removeEventListener("scroll", checkScrollPosition);
-  }, [checkScrollPosition]);
+    container.addEventListener("scroll", throttledCheckScrollPosition, { passive: true });
+    return () => container.removeEventListener("scroll", throttledCheckScrollPosition);
+  }, [throttledCheckScrollPosition]);
 
-  // ⚠️ CRITICAL: User Message Positioning Logic
-  // This useLayoutEffect positions user messages synchronously before paint to prevent flashing.
-  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
-  // Key behaviors:
-  // - Uses flushSync to ensure state updates happen before paint
-  // - Sets isShortChatRef based on viewport usage (threshold: 0.5)
-  // - For short chats: scrolls to bottom, no spacer
-  // - For long chats: adds spacer (~75% viewport, max 800px) and positions ~120px from top
-  // On new user message - position it correctly IMMEDIATELY (synchronously before paint)
+  // ⚠️ SIMPLIFIED: Always scroll to bottom - no complex positioning
+  // This eliminates all visual jumping by keeping chat at bottom
+  // EXCEPT for search queries - disable auto-scroll for web search
   useLayoutEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -234,252 +287,80 @@ export function EnhancedChatInterface() {
         if (positionedMessageIdsRef.current.has(lastMessage.id)) {
           return;
         }
-        
-        // Set positioning state to show processing indicator
-        setPositioningMessageId(lastMessage.id);
-        
+
+        // Disable auto-scroll for search queries
+        if (lastMessage.isSearchQuery) {
+          shouldAutoScrollRef.current = false;
+          positionedMessageIdsRef.current.add(lastMessage.id);
+          isShortChatRef.current = true;
+          return;
+        }
+
         const container = messagesRef.current;
         if (!container) {
-          setPositioningMessageId(null);
           return;
         }
-        
-        const messageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
-        if (!messageElement) {
-          setPositioningMessageId(null);
-          return;
-        }
-        
+
+        // SIMPLIFIED: Always scroll to bottom immediately - no spacer, no complex logic
         const { scrollHeight, clientHeight } = container;
-        const viewportUsage = scrollHeight / clientHeight;
-        
-        // Temporarily disable smooth scrolling for instant positioning
+        const maxScroll = scrollHeight - clientHeight;
+
+        // Disable smooth scrolling for instant positioning
         const originalScrollBehavior = container.style.scrollBehavior;
         container.style.scrollBehavior = 'auto';
-        
-        if (viewportUsage <= 0.5) {
-          // Short chat - no spacer needed, scroll to bottom immediately
-          isShortChatRef.current = true;
-          flushSync(() => {
-            setSpacerHeight(0);
-          });
-          // Re-query message element after flushSync in case DOM changed
-          const updatedMessageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
-          if (updatedMessageElement) {
-            // Scroll to bottom synchronously - no RAF delay
-            messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-            // Mark as positioned and show message
-            positionedMessageIdsRef.current.add(lastMessage.id);
-            // Use flushSync to ensure state update happens before paint
-            flushSync(() => {
-              setPositioningMessageId(null);
-            });
-          }
-        } else {
-          // Long chat - use spacer and position maintenance
-          isShortChatRef.current = false;
-          const offsetFromTop = 120;
-          const spaceForResponse = Math.min(clientHeight * 0.75, 800);
-          
-          // Force spacer to render synchronously before positioning
-          flushSync(() => {
-            setSpacerHeight(spaceForResponse);
-          });
-          
-          // Re-query message element after flushSync - spacer may have changed layout
-          const updatedMessageElement = container.querySelector(`[data-message-id="${lastMessage.id}"]`) as HTMLElement;
-          if (updatedMessageElement) {
-            // Recalculate position with updated layout
-            const messageOffsetTop = (updatedMessageElement as HTMLElement).offsetTop;
-            const targetScrollTop = messageOffsetTop - offsetFromTop;
-            container.scrollTop = Math.max(0, targetScrollTop);
-            // Mark as positioned and show message
-            positionedMessageIdsRef.current.add(lastMessage.id);
-            // Use flushSync to ensure state update happens before paint
-            flushSync(() => {
-              setPositioningMessageId(null);
-            });
-          }
-        }
-        
-        // Restore scroll behavior after positioning
+
+        // No spacer - just scroll to bottom
+        flushSync(() => {
+          setSpacerHeight(0);
+        });
+
+        container.scrollTop = maxScroll;
         container.style.scrollBehavior = originalScrollBehavior;
+
+        // Mark as positioned
+        positionedMessageIdsRef.current.add(lastMessage.id);
+        isShortChatRef.current = true; // Always treat as short chat
       }
     }
   }, [messages.length]);
 
-  // ⚠️ CRITICAL: Short Response Detection & Streaming Scroll Logic
-  // This useEffect detects short responses early and adjusts spacer to prevent jumping.
-  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
-  // Key behaviors:
-  // - Monitors response length during streaming (checks after 3 chunks or 500ms)
-  // - If response < 200 chars, reduces spacer from ~75% to ~20% viewport
-  // - Adjusts scroll position when spacer is reduced
-  // Thresholds are tuned - changing them may cause regressions
-  // During streaming - throttled auto-scroll until user message is about to scroll out of view
+  // ⚠️ SIMPLIFIED: Streaming scroll - always scroll to bottom
+  // EXCEPT for search queries - disable auto-scroll for web search
   useEffect(() => {
     if (isStreaming && streamingContent) {
-      // Detect short responses early to prevent unnecessary scrolling
-      // Check after a few chunks if response is still short, then reduce spacer
-      if (!isShortChatRef.current && !shortResponseDetectedRef.current && spacerHeight > 0) {
-        // Set streaming start time on first chunk
-        if (streamingStartTimeRef.current === 0) {
-          streamingStartTimeRef.current = Date.now();
-        }
-        
-        responseLengthCheckCountRef.current += 1;
-        const contentLength = streamingContent.length;
-        const timeStreaming = Date.now() - streamingStartTimeRef.current;
-        
-        // After 3 chunks or 500ms, check if response is still short
-        if (responseLengthCheckCountRef.current >= 3 || timeStreaming > 500) {
-          // If response is still short (< 200 chars), reduce spacer to prevent jump
-          if (contentLength < 200) {
-            shortResponseDetectedRef.current = true;
-            // Reduce spacer significantly to prevent scroll jump
-            const container = messagesRef.current;
-            if (container) {
-              const { clientHeight } = container;
-              // Use much smaller spacer for short responses
-              const reducedSpacer = Math.min(clientHeight * 0.2, 200);
-              flushSync(() => {
-                setSpacerHeight(reducedSpacer);
-              });
-              // Adjust scroll position to compensate
-              const userMessageElement = container.querySelector(`[data-message-id="${lastUserMessageId.current}"]`) as HTMLElement;
-              if (userMessageElement) {
-                const containerRect = container.getBoundingClientRect();
-                const messageRect = userMessageElement.getBoundingClientRect();
-                const messageTopRelativeToViewport = messageRect.top - containerRect.top;
-                const offsetFromTop = 120;
-                const targetScrollTop = userMessageElement.offsetTop - offsetFromTop;
-                container.scrollTop = Math.max(0, targetScrollTop);
-              }
-            }
-          }
-        }
-      }
+      // Check if current streaming is for a search query
+      const lastUserMessage = messages.find(m => m.id === lastUserMessageId.current);
+      const isSearchQuery = lastUserMessage?.isSearchQuery || currentSearchResults.length > 0;
       
-      // For short chats, use stable scroll-to-bottom logic with throttling
-      if (isShortChatRef.current) {
-        const container = messagesRef.current;
-        if (!container) return;
-        
-        const { scrollHeight } = container;
-        const now = Date.now();
-        const timeSinceLastCheck = now - lastScrollCheckRef.current;
-        
-        // Only scroll if content actually grew and enough time has passed
-        // This prevents unnecessary scrolls that cause flashing
-        if (timeSinceLastCheck >= 100 && scrollHeight > lastScrollHeightRef.current) {
-          lastScrollCheckRef.current = now;
-          lastScrollHeightRef.current = scrollHeight;
-          // Use stable scroll function that only scrolls if near bottom
-          requestAnimationFrame(() => {
-            scrollToBottomIfNear();
-          });
-        } else if (scrollHeight > lastScrollHeightRef.current) {
-          // Update height even if we don't scroll
-          lastScrollHeightRef.current = scrollHeight;
-        }
+      // Disable auto-scroll for search queries
+      if (isSearchQuery) {
+        shouldAutoScrollRef.current = false;
         return;
       }
-      
-      // Check if we should continue auto-scrolling
-      if (!shouldAutoScrollRef.current) {
-        return; // User message is about to go out of view, stop scrolling
-      }
 
-      // Throttle scroll updates to avoid performance issues during rapid streaming
+      const container = messagesRef.current;
+      if (!container || !shouldAutoScrollRef.current) return;
+
+      const { scrollHeight } = container;
       const now = Date.now();
       const timeSinceLastCheck = now - lastScrollCheckRef.current;
-      
-      if (timeSinceLastCheck < scrollThrottleMs) {
-        // Too soon since last check, skip this update
-        return;
-      }
 
-      lastScrollCheckRef.current = now;
+      // Throttle scrolling to every 100ms
+      if (timeSinceLastCheck >= 100 && scrollHeight > lastScrollHeightRef.current) {
+        lastScrollCheckRef.current = now;
+        lastScrollHeightRef.current = scrollHeight;
 
-      // Incremental scroll during streaming - check position and scroll safely
-      const performScroll = () => {
-        const container = messagesRef.current;
-        if (!container || !shouldAutoScrollRef.current) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const maxScroll = scrollHeight - clientHeight;
-        const distanceToBottom = maxScroll - scrollTop;
-
-        // If already at bottom (within 5px), no need to scroll
-        if (distanceToBottom <= 5) {
-          return;
-        }
-
-        // Check if user message is about to scroll out of view BEFORE scrolling
-        if (lastUserMessageId.current) {
-          const messageElement = container.querySelector(`[data-message-id="${lastUserMessageId.current}"]`) as HTMLElement;
-          if (messageElement) {
-            const containerRect = container.getBoundingClientRect();
-            const messageRect = messageElement.getBoundingClientRect();
-            const messageTopRelativeToViewport = messageRect.top - containerRect.top;
-            
-            // Stop scrolling if user message is about to scroll out of view
-            if (messageTopRelativeToViewport <= 100) {
-              shouldAutoScrollRef.current = false;
-              return;
-            }
-
-            // Calculate safe scroll amount - don't scroll more than would push user message too close to top
-            // Leave at least 150px buffer from the threshold
-            const safeScrollDistance = messageTopRelativeToViewport - 150;
-            const scrollAmount = Math.min(distanceToBottom, Math.max(0, safeScrollDistance));
-            
-            if (scrollAmount > 0) {
-              container.scrollTop = scrollTop + scrollAmount;
-            } else {
-              // Can't scroll safely without pushing user message out of view
-              shouldAutoScrollRef.current = false;
-            }
-            return;
+        // Simply scroll to bottom
+        requestAnimationFrame(() => {
+          if (container && shouldAutoScrollRef.current) {
+            const { scrollHeight, clientHeight } = container;
+            const maxScroll = scrollHeight - clientHeight;
+            container.scrollTop = maxScroll;
           }
-        }
-
-        // If we can't find the user message, scroll incrementally (not all the way)
-        // This prevents overscrolling and allows us to check again next time
-        const incrementalScroll = Math.min(distanceToBottom, 100); // Scroll max 100px at a time
-        container.scrollTop = scrollTop + incrementalScroll;
-      };
-
-      // Use single RAF for better performance
-      requestAnimationFrame(performScroll);
-    } else {
-      // Stop scrolling when not streaming
-      if (!isStreaming && !streamingContent) {
-        // Only clean up when streaming has fully stopped (no content and not streaming)
-        // But only reset shouldAutoScrollRef if we're not about to start a new message
-        // Check if last message is an assistant message (streaming completed) vs user message (new message starting)
-        const lastMessage = messages[messages.length - 1];
-        const isStreamingCompleted = lastMessage && lastMessage.role === "assistant";
-        
-        if (scrollAnimationFrameRef.current !== null) {
-          cancelAnimationFrame(scrollAnimationFrameRef.current);
-          scrollAnimationFrameRef.current = null;
-        }
-        
-        // Reset throttle timer
-        lastScrollCheckRef.current = 0;
-        
-        // Reset streaming start time when streaming stops
-        streamingStartTimeRef.current = 0;
-        
-        // Only reset shouldAutoScrollRef when streaming has actually completed (assistant message added)
-        // Don't reset when we're just starting a new message (user message added)
-        if (isStreamingCompleted) {
-          shouldAutoScrollRef.current = false;
-        }
+        });
       }
     }
-  }, [streamingContent, isStreaming, messages, spacerHeight]);
+  }, [streamingContent, isStreaming, messages, currentSearchResults]);
 
   // Initial load - start at bottom
   useEffect(() => {
@@ -488,126 +369,27 @@ export function EnhancedChatInterface() {
     }
   }, [currentConversationId]);
 
-  // ⚠️ CRITICAL: Response Completion Positioning Logic
-  // This useLayoutEffect locks user message position when response completes to prevent jumping.
-  // DO NOT refactor without reading SCROLL_POSITIONING_LOGIC.md
-  // Key behaviors:
-  // - For short chats: Skips all positioning logic (no adjustments needed)
-  // - For long chats: Removes spacer and adjusts scroll to maintain user message position
-  // - Uses flushSync to ensure positioning happens before paint
-  // When response completes, ensure user message stays in place (synchronously before paint)
+  // ⚠️ SIMPLIFIED: Response completion - no positioning logic needed
+  // Since we always stay at bottom, no adjustment needed when response completes
+  // EXCEPT for search queries - disable auto-scroll for web search
   useLayoutEffect(() => {
     if (messages.length >= 2) {
       const lastMessage = messages[messages.length - 1];
-      const secondLastMessage = messages[messages.length - 2];
-
-      // If assistant message just added (response completed)
-      if (lastMessage.role === "assistant" && secondLastMessage.role === "user" && secondLastMessage.id === lastUserMessageId.current) {
-        const container = messagesRef.current;
-        if (!container) return;
-
-        // Prevent double adjustments
-        if (positionLockedRef.current) return;
-
-        // For short chats, skip all positioning logic - scroll was already handled before message was added
-        if (isShortChatRef.current) {
-          return;
-        }
-
-        positionLockedRef.current = true;
-
-        // Find the user message element BEFORE any DOM changes
-        const userMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
-        if (!userMessageElement) {
-          positionLockedRef.current = false;
-          return;
-        }
-
-        // Positioning state should already be set when message was added (in handleSendMessage)
-        // But verify it's set, and if not, set it now
-        if (positioningResponseId !== lastMessage.id) {
-          flushSync(() => {
-            setPositioningResponseId(lastMessage.id);
-          });
-        }
-
-        // Lock the user message position BEFORE removing spacer or making any changes
-        const containerRect = container.getBoundingClientRect();
-        const messageRect = userMessageElement.getBoundingClientRect();
-        const messageTopRelativeToViewport = messageRect.top - containerRect.top;
-        const messageOffsetTop = userMessageElement.offsetTop;
-        const currentScrollTop = container.scrollTop;
-
-        // Store target position - we want to maintain the visual position of the message top
-        const targetMessageTop = messageTopRelativeToViewport;
-        const targetMessageOffsetTop = messageOffsetTop;
-
-        // Temporarily disable smooth scrolling for instant positioning
-        const originalScrollBehavior = container.style.scrollBehavior;
-        container.style.scrollBehavior = 'auto';
-
-        // Remove spacer synchronously
-        flushSync(() => {
-          setSpacerHeight(0);
-        });
-
-        // Re-query elements after spacer removal
-        const updatedUserMessageElement = container.querySelector(`[data-message-id="${secondLastMessage.id}"]`) as HTMLElement;
-        if (!updatedUserMessageElement) {
-          positionLockedRef.current = false;
-          flushSync(() => {
-            setPositioningResponseId(null);
-          });
-          container.style.scrollBehavior = originalScrollBehavior;
-          return;
-        }
-
-        // Find the completed assistant response element (reuse container from above)
-        const updatedUserMessageContainer = updatedUserMessageElement.querySelector('.relative.w-full.max-w-full') as HTMLElement;
-        const completedResponseElement = updatedUserMessageContainer?.querySelector('.mt-6.group') as HTMLElement;
-
-        // Measure new positions
-        const newMessageRect = updatedUserMessageElement.getBoundingClientRect();
-        const newContainerRect = container.getBoundingClientRect();
-        const newMessageTopRelativeToViewport = newMessageRect.top - newContainerRect.top;
-        const newMessageOffsetTop = updatedUserMessageElement.offsetTop;
-
-        // Calculate how much the message moved
-        const visualDifference = newMessageTopRelativeToViewport - targetMessageTop;
-        const offsetDifference = newMessageOffsetTop - targetMessageOffsetTop;
-
-        // Only adjust if message is still visible in viewport
-        const isMessageVisible = newMessageTopRelativeToViewport >= -100 && 
-                                newMessageTopRelativeToViewport <= container.clientHeight + 100;
-
-        // Adjust scroll to compensate for movement synchronously
-        if (isMessageVisible) {
-          const currentMeasuredScrollTop = container.scrollTop;
-          
-          if (Math.abs(visualDifference) > 0.05) {
-            container.scrollTop = currentMeasuredScrollTop - visualDifference;
-          } else if (Math.abs(offsetDifference) > 0.05) {
-            container.scrollTop = currentMeasuredScrollTop - offsetDifference;
-          }
-        }
-
-        // Restore scroll behavior and show response
-        container.style.scrollBehavior = originalScrollBehavior;
+      // Just ensure spacer is 0 when response completes
+      if (lastMessage.role === "assistant") {
+        setSpacerHeight(0);
         
-        // Mark as positioned and show response
-        flushSync(() => {
-          setPositioningResponseId(null);
-        });
-        
-        // Reset lock after adjustment completes
-        positionLockedRef.current = false;
+        // Disable auto-scroll if this is a search response
+        if (lastMessage.searchResults && lastMessage.searchResults.length > 0) {
+          shouldAutoScrollRef.current = false;
+        }
       }
     }
   }, [messages.length]);
 
-  // Load last conversation on mount
+  // Load last conversation on mount or when user changes
   useEffect(() => {
-    const conversations = getConversations();
+    const conversations = getConversations(userId);
     if (conversations.length > 0) {
       const lastConversation = conversations[0];
       setCurrentConversationId(lastConversation.id);
@@ -620,13 +402,13 @@ export function EnhancedChatInterface() {
       setCurrentConversationId(`conv_${Date.now()}`);
       positionedMessageIdsRef.current.clear(); // Reset for new conversation
     }
-  }, []);
+  }, [userId]);
 
   // Listen for load-conversation events from sidebar
   useEffect(() => {
     const handleLoadConversation = (event: CustomEvent<string>) => {
       const conversationId = event.detail;
-      const conversation = getConversation(conversationId);
+      const conversation = getConversation(conversationId, userId);
       
       if (conversation) {
         setCurrentConversationId(conversation.id);
@@ -641,7 +423,7 @@ export function EnhancedChatInterface() {
     return () => {
       window.removeEventListener('load-conversation', handleLoadConversation as EventListener);
     };
-  }, []);
+  }, [userId]);
 
   // Save conversation to localStorage
   const saveCurrentConversation = useCallback((msgs: Message[]) => {
@@ -655,10 +437,10 @@ export function EnhancedChatInterface() {
       updatedAt: new Date(),
     };
 
-    saveConversation(conversation);
+    saveConversation(conversation, userId);
     // Dispatch event to notify sidebar of conversation save
     window.dispatchEvent(new CustomEvent('conversation-saved'));
-  }, [currentConversationId]);
+  }, [currentConversationId, userId]);
 
   const handleNewChat = useCallback(() => {
     // Cancel any ongoing requests
@@ -699,6 +481,37 @@ export function EnhancedChatInterface() {
     }
   };
 
+  const handleCitationClick = useCallback((citationIndex: number) => {
+    // Highlight the citation
+    setHighlightedCitation(citationIndex);
+
+    // Scroll to the source card
+    const sourceElement = document.getElementById(`source-${citationIndex}`);
+    if (sourceElement) {
+      sourceElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Clear highlight after 2 seconds
+    setTimeout(() => {
+      setHighlightedCitation(null);
+    }, 2000);
+  }, []);
+
+  const handleSourceClick = useCallback((url: string, index: number) => {
+    // Get the source title from search results
+    const searchResults = currentSearchResults.length > 0 ? currentSearchResults : [];
+    const source = searchResults[index];
+    const title = source?.title || new URL(url).hostname;
+
+    // Open in right pane web viewer
+    openUrl(url, title);
+  }, [currentSearchResults, openUrl]);
+
+  const handleRelatedQuestionClick = useCallback((question: string) => {
+    // Send the related question as a new message
+    handleSendMessage(question, true); // Pass true to force search mode
+  }, []);
+
   const handleRetry = async (messageIndex: number) => {
     if (messageIndex < 0 || messageIndex >= messages.length) return;
 
@@ -710,17 +523,18 @@ export function EnhancedChatInterface() {
     setMessages(messagesToKeep);
     setRetryingMessageIndex(messageIndex);
 
-    // Retry with the user's message
-    await handleSendMessage(userMessage.content, messagesToKeep);
+    // Retry with the user's message, preserving original search mode
+    await handleSendMessage(userMessage.content, userMessage.isSearchQuery || false, messagesToKeep);
     setRetryingMessageIndex(null);
   };
 
-  const handleSendMessage = async (content: string, previousMessages: Message[] = messages) => {
+  const handleSendMessage = async (content: string, searchMode: boolean = false, previousMessages: Message[] = messages) => {
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       role: "user",
       content,
       timestamp: new Date(),
+      isSearchQuery: searchMode, // Track if this is a search query
     };
 
     // Store the ID so we can identify it after render
@@ -736,7 +550,8 @@ export function EnhancedChatInterface() {
     // These refs MUST be reset when starting a new message to ensure correct positioning behavior.
     // DO NOT remove any of these resets without understanding their purpose.
     // See SCROLL_POSITIONING_LOGIC.md for details.
-    shouldAutoScrollRef.current = true;
+    // For search queries, disable auto-scroll; otherwise enable it
+    shouldAutoScrollRef.current = !searchMode;
     lastScrollHeightRef.current = 0;
     positionLockedRef.current = false;
     shortResponseDetectedRef.current = false;
@@ -749,11 +564,39 @@ export function EnhancedChatInterface() {
     setIsLoading(true);
     setStreamingContent("");
     setIsStreaming(false);
+    setCurrentToolCall(null); // Clear any previous tool call state
+    setCurrentSearchResults([]); // Clear previous search results
+    searchResultsRef.current = []; // Clear ref too
+    setHighlightedCitation(null); // Clear citation highlight
 
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
     try {
+      // Build editor context for the LLM (include both files and URLs)
+      // Only include file content if it's small to reduce payload size
+      const editorContext = (openFiles.length > 0 || activeTab) ? {
+        openFiles: openFiles.map(f => ({ path: f.path, isDirty: f.isDirty })),
+        activeFile: activeFile ? {
+          path: activeFile.path,
+          // Only send content if file is small (< 50KB) to reduce payload
+          content: activeFile.content.length < 50000 ? activeFile.content : undefined,
+          isDirty: activeFile.isDirty,
+        } : null,
+        activeTab: activeTab ? {
+          type: activeTab.type,
+          title: activeTab.title,
+          url: activeTab.url,
+          path: activeTab.path,
+        } : null,
+      } : null;
+
+      console.log('[SEARCH-REQUEST] Sending request with:', {
+        searchMode,
+        lastMessage: content,
+        messageCount: updatedMessages.length
+      });
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -761,6 +604,8 @@ export function EnhancedChatInterface() {
         },
         body: JSON.stringify({
           messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          editorContext,
+          searchMode,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -792,16 +637,33 @@ export function EnhancedChatInterface() {
             if (line.startsWith("data: ")) {
               const data = line.slice(6);
               if (data === "[DONE]") {
+                // Use the ref value to avoid closure issues
+                const finalSearchResults = searchResultsRef.current;
+
+                console.log('[SEARCH-FINAL] Creating message with results:', {
+                  hasResults: finalSearchResults.length > 0,
+                  resultCount: finalSearchResults.length,
+                  results: finalSearchResults
+                });
+
                 const assistantMessage: Message = {
                   id: `msg_${Date.now()}`,
                   role: "assistant",
                   content: accumulatedContent,
                   timestamp: new Date(),
+                  searchResults: finalSearchResults.length > 0 ? finalSearchResults : undefined,
                 };
+
+                console.log('[SEARCH-COMPLETE] Assistant message created:', {
+                  hasSearchResults: !!assistantMessage.searchResults,
+                  resultCount: assistantMessage.searchResults?.length || 0,
+                  messageId: assistantMessage.id
+                });
                 // ⚠️ CRITICAL: Response completion positioning state
                 // Only set positioningResponseId for long chats - short chats skip positioning to prevent flashing.
                 // For short chats, scroll to bottom before adding message to prevent jump.
                 // DO NOT set positioningResponseId for short chats - this causes flashing.
+                // Search results now use the same positioning logic as regular responses
                 if (!isShortChatRef.current) {
                   setPositioningResponseId(assistantMessage.id);
                 } else {
@@ -821,11 +683,72 @@ export function EnhancedChatInterface() {
                 saveCurrentConversation(finalMessages);
                 setStreamingContent("");
                 setIsLoading(false);
+                
+                // Auto-open top search results in split view (similar to how files are opened)
+                if (finalSearchResults.length > 0) {
+                  // Open the top result automatically (non-video results preferred)
+                  const topResult = finalSearchResults.find(r => r.type !== 'video') || finalSearchResults[0];
+                  if (topResult) {
+                    const title = topResult.title || new URL(topResult.url).hostname;
+                    // Small delay to ensure UI is ready
+                    setTimeout(() => {
+                      openUrl(topResult.url, title);
+                    }, 100);
+                  }
+                }
+                
+                setCurrentSearchResults([]); // Clear search results after message is finalized
+                searchResultsRef.current = []; // Clear ref too
                 return;
               }
 
               try {
                 const parsed = JSON.parse(data);
+
+                // Handle search results
+                if (parsed.type === 'search_results') {
+                  console.log('[SEARCH] Received search results:', parsed.results);
+                  console.log('[SEARCH] Result count:', parsed.results?.length || 0);
+                  const results = parsed.results || [];
+                  searchResultsRef.current = results; // Store in ref to avoid closure issues
+                  setCurrentSearchResults(results); // Also update state for re-renders
+                  // Don't show these in streaming content
+                  continue;
+                }
+
+                // Handle tool execution messages
+                if (parsed.type === 'tool_call') {
+                  setCurrentToolCall({ tool: parsed.tool, params: parsed.params });
+                  // Add typewriter-style message to streaming content with separator
+                  const toolMessage = `\n\n🔧 *${formatToolCallMessage(parsed.tool, parsed.params)}*\n\n---\n\n`;
+                  accumulatedContent += toolMessage;
+                  setStreamingContent(accumulatedContent);
+                  // Keep isStreaming true during tool execution
+                  setIsStreaming(true);
+                } else if (parsed.type === 'tool_result') {
+                  // Tool completed successfully, clear the indicator
+                  setCurrentToolCall(null);
+
+                  // Sync editor if write_file was executed
+                  if (parsed.tool === 'write_file' && parsed.params) {
+                    const { path, content } = parsed.params;
+                    if (typeof window !== 'undefined' && (window as any).__operaStudioUpdateFileContent) {
+                      (window as any).__operaStudioUpdateFileContent(path, content);
+                    }
+                  }
+
+                  // Keep isStreaming true - content may follow
+                  setIsStreaming(true);
+                } else if (parsed.type === 'tool_error') {
+                  // Tool failed, clear the indicator and show error in content
+                  setCurrentToolCall(null);
+                  const errorMessage = `\n⚠️ Tool execution error (${parsed.tool}): ${parsed.error}\n\n---\n\n`;
+                  accumulatedContent += errorMessage;
+                  setStreamingContent(accumulatedContent);
+                  setIsStreaming(true);
+                }
+
+                // Handle regular content
                 if (parsed.content) {
                   accumulatedContent += parsed.content;
                   setStreamingContent(accumulatedContent);
@@ -882,6 +805,7 @@ export function EnhancedChatInterface() {
       }
       setIsLoading(false);
       setStreamingContent("");
+      setCurrentSearchResults([]); // Clear search results on error
     }
   };
 
@@ -905,13 +829,13 @@ export function EnhancedChatInterface() {
   const hasMessages = messages.length > 0 || streamingContent;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Messages Area - grows to fill space */}
       <div
         ref={messagesRef}
-        className="flex-1 overflow-y-auto px-8 py-6"
+        className="flex-1 overflow-y-auto overflow-x-hidden px-8 py-6"
       >
-        <div className="mx-auto w-full max-w-[720px]">
+        <div className="mx-auto w-full max-w-[900px] overflow-hidden">
           {!hasMessages ? (
             <WelcomeScreen onPromptSelect={handleSendMessage} />
           ) : (
@@ -979,64 +903,99 @@ export function EnhancedChatInterface() {
                           Opacity controlled via style prop based on positioningResponseId.
                           For short chats: positioningResponseId is never set, so response appears immediately.
                           DO NOT change to motion.div or remove opacity control without reading SCROLL_POSITIONING_LOGIC.md */}
-                      {/* Completed assistant response attached to user message */}
-                      {message.role === "user" && hasAssistantReply && (
-                        <div 
+                      {/* Completed OR streaming assistant response attached to user message */}
+                      {message.role === "user" && (hasAssistantReply || (isLastUserMessage && streamingContent)) && (
+                        <div
                           className="mt-6 group"
                           style={{
-                            opacity: positioningResponseId === nextMessage.id ? 0 : 1,
-                            pointerEvents: positioningResponseId === nextMessage.id ? 'none' : undefined
+                            opacity: positioningResponseId === nextMessage?.id ? 0 : 1,
+                            pointerEvents: positioningResponseId === nextMessage?.id ? 'none' : undefined
                           }}
                         >
-                          <MessageRenderer content={nextMessage.content} isUser={false} />
+                          {/* Use SearchResponse for search results, regular MessageRenderer otherwise */}
+                          {(() => {
+                            // Check for search results in either completed message or current streaming state
+                            const isStreaming = Boolean(isLastUserMessage && streamingContent);
+                            const searchResults = isStreaming ? currentSearchResults : (nextMessage?.searchResults || []);
+                            const content = isStreaming ? streamingContent : (nextMessage?.content || '');
+                            // Fix: Always render SearchResponse for search queries
+                            // Check both: user message was a search query OR assistant message has search results
+                            const isSearchQuery = message.isSearchQuery || false;
+                            const assistantHasSearchResults = (nextMessage?.searchResults?.length || 0) > 0;
+                            const hasSearchResults = searchResults.length > 0 || isSearchQuery || assistantHasSearchResults;
 
-                          {/* Action buttons for completed assistant response */}
-                          <button
-                            onClick={() => handleCopyMessage(nextMessage.content, nextMessage.id)}
-                            className="mt-2 text-gray-400 transition-colors hover:text-white"
-                            aria-label="Copy message"
-                          >
-                            {copiedMessageId === nextMessage.id ? (
-                              <Check className="h-4 w-4" />
+                            console.log('[SEARCH-UI] Unified render:', {
+                              hasSearchResults,
+                              isSearchQuery,
+                              assistantHasSearchResults,
+                              resultCount: searchResults.length,
+                              isStreaming,
+                              messageId: nextMessage?.id,
+                              userMessageIsSearch: message.isSearchQuery,
+                              assistantResultsCount: nextMessage?.searchResults?.length,
+                              willRenderSearchResponse: hasSearchResults
+                            });
+
+                            return hasSearchResults ? (
+                              <SearchResponse
+                                query={message.content}
+                                searchResults={searchResults}
+                                aiResponse={content}
+                                isStreaming={isStreaming}
+                                onCitationClick={handleCitationClick}
+                                onSourceClick={handleSourceClick}
+                                onRelatedQuestionClick={handleRelatedQuestionClick}
+                                highlightedCitation={highlightedCitation}
+                                thinkingStage={isStreaming ? 'analyzing' : 'done'}
+                              />
                             ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </button>
+                              <MessageRenderer
+                                content={content}
+                                isUser={false}
+                                onCitationClick={handleCitationClick}
+                                onSourceClick={handleSourceClick}
+                              />
+                            );
+                          })()}
 
-                          <button
-                            onClick={() => handleRetry(index)}
-                            disabled={retryingMessageIndex === index}
-                            className="mt-2 ml-2 text-gray-400 transition-colors hover:text-white disabled:opacity-50"
-                            aria-label="Retry message"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </button>
+                          {/* Action buttons for completed assistant response - only show when not streaming */}
+                          {nextMessage && !streamingContent && (
+                            <>
+                              <button
+                                onClick={() => handleCopyMessage(nextMessage.content, nextMessage.id)}
+                                className="mt-2 text-gray-400 transition-colors hover:text-white"
+                                aria-label="Copy message"
+                              >
+                                {copiedMessageId === nextMessage.id ? (
+                                  <Check className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => handleRetry(index)}
+                                disabled={retryingMessageIndex === index}
+                                className="mt-2 ml-2 text-gray-400 transition-colors hover:text-white disabled:opacity-50"
+                                aria-label="Retry message"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
 
-                      {/* Streaming response attached to last user message */}
-                      {isLastUserMessage && (streamingContent || isLoading) && streamingContent && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ 
-                            duration: 0.5,
-                            ease: [0.16, 1, 0.3, 1]
-                          }}
-                          className="mt-6"
-                        >
-                          <MessageRenderer content={streamingContent} isUser={false} />
-                        </motion.div>
-                      )}
+                      {/* Old streaming section removed - now handled by unified section above */}
 
                       {/* Processing indicator attached to last user message */}
                       {isLastUserMessage && isLoading && !streamingContent && (
-                        <motion.div 
+                        <motion.div
                           ref={processingIndicatorRef}
                           className="mt-6"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          transition={{ 
+                          transition={{
                             duration: 0.4,
                             ease: [0.16, 1, 0.3, 1]
                           }}
@@ -1115,7 +1074,7 @@ export function EnhancedChatInterface() {
 
       {/* Input Area - fixed at bottom, outside scroll container */}
       <div className="flex-shrink-0">
-        <ChatInput onSend={(content) => handleSendMessage(content)} />
+        <ChatInput onSend={(content, searchMode) => handleSendMessage(content, searchMode || false)} />
       </div>
     </div>
   );
